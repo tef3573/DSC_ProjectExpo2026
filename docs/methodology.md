@@ -2,7 +2,7 @@
 
 ## 1. Point-in-Time Universe Construction
 To eliminate survivorship and look-ahead bias, an asset $i$ is investable at date $t$ if and only if:
-  $$M_{t, i} = \mathbf{1}_{[\text{start\_date}_i \le t \le \text{end\_date}_i]}$$
+  $$M_{i,t} = 1 \quad \text{if} \quad t_{\text{start}, i} \le t \le t_{\text{end}, i}, \quad \text{else} \quad 0$$
   
 Assets outside this tenure window receive an allocation weight of zero.
 
