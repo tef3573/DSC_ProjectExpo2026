@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: black_ceo_backtest_app
+    volumes:
+      # Sync local directory with container working directory
+      - .:/app
+    # Keeps container running interactively or executes commands directly
+    command: python -m src.data_loader
