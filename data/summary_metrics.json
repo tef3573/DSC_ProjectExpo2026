@@ -1,0 +1,34 @@
+{
+    "Black_CEO_Net": {
+        "CAGR": 0.06768564890183582,
+        "Annualized_Volatility": 0.29446501184716584,
+        "Sharpe_Ratio": 0.26893872482012265,
+        "Sortino_Ratio": 0.016620058047612914,
+        "Max_Drawdown": -0.8390597108391668,
+        "Calmar_Ratio": 0.08066845306413477
+    },
+    "Black_CEO_Gross": {
+        "CAGR": 0.06856274231057036,
+        "Annualized_Volatility": 0.29446358167004333,
+        "Sharpe_Ratio": 0.271727793803034,
+        "Sortino_Ratio": 0.016788687133058543,
+        "Max_Drawdown": -0.8390597108391666,
+        "Calmar_Ratio": 0.08171378201677551
+    },
+    "SPY": {
+        "CAGR": 0.08259123516001665,
+        "Annualized_Volatility": 0.19227191748353858,
+        "Sharpe_Ratio": 0.35521098102736703,
+        "Sortino_Ratio": 0.021396902742306937,
+        "Max_Drawdown": -0.5518946344015557,
+        "Calmar_Ratio": 0.1496503680445708
+    },
+    "RSP": {
+        "CAGR": 0.09794285138189118,
+        "Annualized_Volatility": 0.18429260228828537,
+        "Sharpe_Ratio": 0.43903580960694766,
+        "Sortino_Ratio": 0.02813752806763041,
+        "Max_Drawdown": -0.5992281668624108,
+        "Calmar_Ratio": 0.163448343716426
+    }
+}
