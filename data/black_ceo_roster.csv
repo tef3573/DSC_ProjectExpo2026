@@ -1,20 +1,22 @@
-ticker,company_name,ceo_name,start_date,end_date,sector
-AXP,American Express,Kenneth Chenault,2001-04-23,2018-02-01,Financial Services
-DRI,Darden Restaurants,Clarence Otis Jr.,2004-12-01,2014-09-17,Consumer Discretionary
-XRX,Xerox Corporation,Ursula Burns,2009-07-01,2016-12-31,Information Technology
-MRK,Merck & Co.,Kenneth Frazier,2011-01-01,2021-06-30,Healthcare
-MCD,McDonald's Corp,Don Thompson,2012-07-01,2015-03-01,Consumer Discretionary
-CCL,Carnival Corp,Arnold Donald,2013-07-03,2022-08-01,Consumer Discretionary
-PBPB,Potbelly Corp,Aylwin Lewis,2013-10-04,2017-08-08,Consumer Discretionary
-LOW,Lowe's Companies,Marvin Ellison,2018-07-02,2026-10-24,Consumer Discretionary
-MTB,M&T Bank Corp,René Jones,2017-12-20,2026-10-24,Financial Services
-COMP,Compass Inc,Robert Reffkin,2021-04-01,2026-10-24,Real Estate
-QRTEA,Qurate Retail Group,David Rawlinson II,2021-10-01,2026-10-24,Consumer Discretionary
-IFF,Intl Flavors & Fragrances,Frank Clyburn,2022-02-14,2024-02-01,Materials
-EXC,Exelon Corporation,Calvin Butler,2022-12-30,2026-10-24,Utilities
-SO,Southern Company,Christopher Womack,2023-05-24,2026-10-24,Utilities
-CHRW,C.H. Robinson Worldwide,David Bozeman,2023-06-26,2026-10-24,Industrials
-SAIC,Science Applications Intl,Toni Townes-Whitley,2023-10-02,2026-10-24,Industrials
-KSS,Kohl's Corp,Michael Bender,2025-11-01,2026-10-24,Consumer Discretionary
-DTE,DTE Energy,Joi Harris,2025-11-15,2026-10-24,Utilities
-HSIC,Henry Schein,Frederick Lowery,2025-12-01,2026-10-24,Healthcare
+ticker, company_name             , ceo_name           , start_date, end_date  , sector
+AXP   , American Express         , Kenneth Chenault   , 2001-01-29, 2018-02-01, Financial Services
+DRI   , Darden Restaurants       , Clarence Otis Jr.  , 2004-12-01, 2014-09-17, Consumer Discretionary
+XRX   , Xerox Corporation        , Ursula Burns       , 2009-07-01, 2016-12-31, Information Technology
+MRK   , Merck & Co.              , Kenneth Frazier    , 2011-01-01, 2021-06-30, Healthcare
+MCD   , McDonald's Corp          , Don Thompson       , 2012-07-01, 2015-03-01, Consumer Discretionary
+CCL   , Carnival Corp            , Arnold Donald      , 2013-07-03, 2022-08-01, Consumer Discretionary
+PBPB  , Potbelly Corp            , Aylwin Lewis       , 2013-10-04, 2017-08-08, Consumer Discretionary
+JCP   , J.C. Penney              , Marvin Ellison     , 2015-08-01, 2018-06-01, Consumer Discretionary
+MTB   , M&T Bank Corp            , René Jones         , 2017-12-20, 2026-10-27, Financial Services
+LOW   , Lowe's Companies         , Marvin Ellison     , 2018-07-02, 2026-10-27, Consumer Discretionary
+COMP  , Compass Inc              , Robert Reffkin     , 2021-04-01, 2026-10-27, Real Estate
+WBA   , Walgreens Boots Alliance , Rosalind Brewer    , 2021-03-15, 2023-08-31, Consumer Staples
+QRTEA , Qurate Retail Group      , David Rawlinson II , 2021-10-01, 2026-10-27, Consumer Discretionary
+IFF   , Intl Flavors & Fragrances, Frank Clyburn      , 2022-02-14, 2024-02-01, Materials
+EXC   , Exelon Corporation       , Calvin Butler      , 2022-12-30, 2026-10-27, Utilities
+SO    , Southern Company         , Christopher Womack , 2023-05-24, 2026-10-27, Utilities
+CHRW  , C.H. Robinson Worldwide  , David Bozeman      , 2023-06-26, 2026-10-27, Industrials
+SAIC  , Science Applications Intl, Toni Townes-Whitley, 2023-10-02, 2026-10-27, Industrials
+KSS   , Kohl's Corp              , Michael Bender     , 2025-11-01, 2026-10-27, Consumer Discretionary
+DTE   , DTE Energy               , Joi Harris         , 2025-11-15, 2026-10-27, Utilities
+HSIC  , Henry Schein             , Frederick Lowery   , 2025-12-01, 2026-10-27, Healthcare

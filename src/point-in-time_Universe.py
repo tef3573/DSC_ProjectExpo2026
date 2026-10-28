@@ -1,71 +1,70 @@
 """
-Point-in-Time Universe Masking Module
--------------------------------------
-Constructs a dynamic T x N boolean mask matrix where an asset is marked True
-only during verified tenure dates, preventing look-ahead and survivorship bias.
+src/universe.py
+Generates the point-in-time eligibility boolean mask to prevent survivorship and look-ahead bias.
 """
+from pathlib import Path
+import logging
+import pandas as pd
+import numpy as np
 
-from typing import Tuple
-import pandas as pd  # pyright: ignore[reportMissingModuleSource]
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-ROSTER_PATH = "data/black_ceo_roster.csv"
-PRICES_PATH = "data/prices_daily.csv"
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE_DIR / "data"
 
 
-def create_point_in_time_mask(
-    roster_path: str = ROSTER_PATH, prices_path: str = PRICES_PATH
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def build_universe_mask(price_df: pd.DataFrame, roster_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Loads daily prices and builds the investable universe mask.
-
-    Parameters:
-        roster_path (str): Path to the verified tenure roster CSV.
-        prices_path (str): Path to historical daily prices CSV.
-
-    Returns:
-        stock_prices (pd.DataFrame): Daily adjusted prices for universe stocks.
-        mask (pd.DataFrame): Boolean DataFrame (True only when stock is investable).
-        benchmarks (pd.DataFrame): Daily prices for SPY and RSP.
+    Constructs a T x N boolean mask.
+    A company enters on start_date + 1 trading day (look-ahead protection)
+    and exits on end_date.
     """
-    # 1. Load price matrix with parsed datetime index
-    prices = pd.read_csv(prices_path, index_col=0, parse_dates=True)
+    dates = price_df.index
+    eligible_tickers = sorted(roster_df["ticker"].unique().tolist())
+    
+    # Audit for missing price series: fail loudly instead of silent skip
+    missing_from_cache = [t for t in eligible_tickers if t not in price_df.columns]
+    if missing_from_cache:
+        raise KeyError(f"The following roster tickers are missing from price matrix: {missing_from_cache}")
 
-    # 2. Extract benchmarks and isolate asset prices
-    available_bms = [c for c in ["SPY", "RSP"] if c in prices.columns]
-    benchmarks = prices[available_bms].copy()
-    stock_prices = prices.drop(columns=["SPY", "RSP"], errors="ignore").sort_index()
+    mask = pd.DataFrame(False, index=dates, columns=eligible_tickers)
 
-    # 3. Load executive tenure roster
-    roster = pd.read_csv(roster_path, parse_dates=["start_date", "end_date"])
-
-    # 4. Initialize empty boolean mask matching asset prices dimensions
-    mask = pd.DataFrame(False, index=stock_prices.index, columns=stock_prices.columns)
-
-    # 5. Populate True for active CEO tenures
-    for _, row in roster.iterrows():
+    for _, row in roster_df.iterrows():
         ticker = row["ticker"]
-        start_dt = row["start_date"]
-        end_dt = row["end_date"]
+        start = row["start_date"]
+        end = row["end_date"]
+        
+        # Shift start by 1 trading session to avoid execution look-ahead bias
+        active_window = (dates > start) & (dates <= end)
+        mask.loc[active_window, ticker] = mask.loc[active_window, ticker] | True
 
-        if ticker in mask.columns:
-            # Set True for dates strictly within [start_date, end_date]
-            mask.loc[(mask.index >= start_dt) & (mask.index <= end_dt), ticker] = True
+    # Zero out dates where prices are missing or unlisted
+    for t in eligible_tickers:
+        mask[t] = mask[t] & price_df[t].notna()
 
-    return stock_prices, mask, benchmarks
+    return mask
+
+
+def get_investable_returns(prices: pd.DataFrame, mask: pd.DataFrame) -> pd.DataFrame:
+    """
+    Computes daily returns and applies the universe mask.
+    Inactive days are NaN so they exert zero mathematical weight.
+    """
+    daily_returns = prices.pct_change(fill_method=None)
+    common_tickers = mask.columns.intersection(daily_returns.columns)
+    masked_returns = daily_returns[common_tickers].where(mask[common_tickers], np.nan)
+    return masked_returns
 
 
 if __name__ == "__main__":
-    stock_prices, mask, benchmarks = create_point_in_time_mask()
-    active_counts = mask.sum(axis=1)
+    prices = pd.read_csv(DATA_DIR / "prices_daily.csv", index_col=0, parse_dates=True)
+    roster = pd.read_csv(DATA_DIR / "black_ceo_roster.csv")
+    roster.columns = roster.columns.str.strip()
+    roster["start_date"] = pd.to_datetime(roster["start_date"])
+    roster["end_date"] = pd.to_datetime(roster["end_date"].fillna("2026-10-27"))
 
-    print("-" * 60)
-    print(" POINT-IN-TIME UNIVERSE MASK SUMMARY")
-    print("-" * 60)
-    print(f"Date Range:              {mask.index.min().date()} to {mask.index.max().date()}")
-    print(f"Total Trading Days:      {len(mask)}")
-    print(f"Total Unique Assets:     {mask.shape[1]}")
-    print(f"Max Concurrent CEOs:     {active_counts.max()}")
-    print(f"Min Concurrent CEOs:     {active_counts.min()}")
-    print(f"Average Active CEOs:     {active_counts.mean():.2f}")
-    print(f"Benchmarks Available:    {list(benchmarks.columns)}")
-    print("-" * 60)
+    mask = build_universe_mask(prices, roster)
+    print("Point-in-Time Universe Mask built successfully.")
+    print(f"Mask Shape: {mask.shape}")
+    print("Active constituent count over time:")
+    print(mask.sum(axis=1).describe())
