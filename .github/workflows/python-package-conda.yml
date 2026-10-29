@@ -28,3 +28,10 @@ jobs:
         run: |
           python -c "import pandas as pd; df = pd.read_csv('data/black_ceo_roster.csv'); print(f'Roster valid with {len(df)} entries')"
           python src/universe.py
+          python src/point-in-time_Universe.py
+          python src/investable_returns.py
+          python src/portfolio_backtest.py
+          python src/visualization.py
+          python src/utils.py
+          python src/__init__.py
+
