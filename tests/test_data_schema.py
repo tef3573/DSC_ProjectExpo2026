@@ -3,6 +3,7 @@ tests/test_data_schema.py
 Unit tests to validate the integrity, schema, and point-in-time date consistency
 of the executive roster and delisted price archives.
 """
+
 from pathlib import Path
 import unittest
 import pandas as pd
