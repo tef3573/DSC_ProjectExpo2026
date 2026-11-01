@@ -1,6 +1,7 @@
 # Black CEO Equity Strategy: Quantitative Alpha & Factor Attribution
 An institutional-grade, survivorship-bias-free quantitative backtesting engine evaluating whether a dynamic portfolio of Black CEO-led publicly traded US corporations exhibits risk-adjusted excess returns ($\alpha > 0$) relative to market cap-weighted (`SPY`) and equal-weighted (`RSP`) S&P 500 benchmarks.
 
+An institutional-grade, point-in-time quantitative backtesting engine modeling excess return and risk attribution of a dynamic equity portfolio composed of Black Fortune 500 & S&P 500 CEOs from 2000 through October 2026.
 ---
 
 ## Research Hypotheses
@@ -20,7 +21,7 @@ An institutional-grade, survivorship-bias-free quantitative backtesting engine e
 
 ---
 
-## Repository Structure
+## Architecture Overview
 ```text
 .
 ├── data/
@@ -28,6 +29,10 @@ An institutional-grade, survivorship-bias-free quantitative backtesting engine e
 │   ├── delisted/
 │   │   └── JCP.csv              # Survivorship-free historical NYSE prices (740 sessions)
 │   └── prices_daily.csv         # Daily adjusted close matrix (2000–2026)
+│   ├── prices_daily.csv         # 6,748 trading sessions x 23 columns (SPY-aligned)
+│   └── universe_mask.csv        # Boolean eligibility matrix (t+1 execution lag)
+├── docs/
+│   └── universe.md              # Mathematical rules and diversification defense
 ├── src/
 │   ├── __init__.py              # Package initializer
 │   ├── data_loader.py           # Ingestion engine & delisted merger
@@ -35,6 +40,26 @@ An institutional-grade, survivorship-bias-free quantitative backtesting engine e
 │   └── backtest.py              # Vectorized backtesting & metrics engine
 ├── tests/
 │   └── test_data_schema.py      # Automated schema & date consistency tests
+│   └── test_universe.py         # Lag & active constituent count bounds
+│   └── test_integration_milestone1.py # End-to-end pipeline integration check
 ├── requirements.txt             # Pinned environment dependencies
 ├── web/                        
 └── README.md
+
+---
+## Milestone 1 Status: Verified & Frozen (v0.1.0)
+
+| Requirement | Implementation Details | Status |
+| :--- | :--- | :--- |
+| **Audited Universe** | 21 unique executive tenures across large/mid-cap equities | Verified |
+| **Market Data Ingestion** | Automated Yahoo Finance batch engine (`2000-01-01` to current) | Verified |
+| **Corporate Action Defense** | `QVCG` continuity fallback merged into `QRTEA` | Verified |
+| **Survivorship-Bias Defense** | Merged delisted archive (`data/delisted/JCP.csv`) | Verified |
+| **Trading Calendar** | Reindexed to `SPY` (6,748 sessions, 5-day bounded forward-fill) | Verified |
+| **Execution Lag** | Strict $t+1$ shift applied to eliminate look-ahead bias | Verified |
+
+---
+## Test Verification
+
+```bash
+python3 -m unittest discover -s tests -v
