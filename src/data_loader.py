@@ -5,6 +5,7 @@ Automated market data ingestion pipeline for the Black CEO portfolio universe.
 - Sub-task #66: QVCG corporate action fallback resolution for QRTEA.
 - Local delisted archive integration (JCP).
 - Sub-task #67: Reindex prices to SPY trading calendar and forward-fill disparities.
+- Sub-task #68: Export validated prices_daily.csv matrix.
 """
 from pathlib import Path
 import logging
@@ -79,7 +80,6 @@ def resolve_corporate_actions(prices: pd.DataFrame) -> pd.DataFrame:
 def align_to_trading_calendar(prices: pd.DataFrame) -> pd.DataFrame:
     """
     Sub-task #67: Reindexes price matrix to the SPY calendar and forward-fills.
-    Ensures every asset conforms to official US equity market trading dates.
     """
     if "SPY" not in prices.columns:
         raise ValueError("SPY benchmark missing from price matrix; cannot calibrate calendar.")
@@ -87,10 +87,7 @@ def align_to_trading_calendar(prices: pd.DataFrame) -> pd.DataFrame:
     df = prices.copy()
     spy_calendar = df["SPY"].dropna().index.sort_values()
 
-    # Reindex entire universe to the official SPY trading sessions
     df = df.reindex(spy_calendar)
-
-    # Forward-fill up to 5 consecutive sessions for holiday/reporting disparities
     df = df.ffill(limit=5)
     logging.info(f"Successfully aligned prices to SPY calendar: {len(df)} market sessions.")
     return df
@@ -151,12 +148,25 @@ def batch_download_adjusted_prices(tickers: List[str], start_date: str = START_D
     return prices
 
 
-if __name__ == "__main__":
-    roster_symbols = load_roster_tickers()
-    df_prices = batch_download_adjusted_prices(roster_symbols)
+def export_prices_matrix(df: pd.DataFrame, output_path: Path = OUTPUT_PRICES_PATH) -> Path:
+    """Sub-task #68: Exports the cleaned price matrix with ISO date index formatting."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df.index.name = "Date"
+    df.to_csv(output_path, float_format="%.4f")
+    logging.info(f"Successfully exported master daily prices matrix to: {output_path}")
+    return output_path
 
-    print("\n--- SUB-TASK #67 VALIDATION ---")
-    print(f"Total Calendar Trading Sessions (SPY aligned): {len(df_prices)}")
-    print(f"Index is strictly monotonic increasing: {df_prices.index.is_monotonic_increasing}")
-    print("Sample aligned rows:")
-    print(df_prices[["SPY", "RSP", "AXP", "QRTEA", "JCP"]].tail(3))
+
+def run_pipeline() -> pd.DataFrame:
+    """Orchestrates end-to-end ingestion, normalization, and persistence."""
+    roster_symbols = load_roster_tickers()
+    prices = batch_download_adjusted_prices(roster_symbols)
+    export_prices_matrix(prices)
+    return prices
+
+
+if __name__ == "__main__":
+    df_prices = run_pipeline()
+    print("\n--- SUB-TASK #68 PIPELINE EXECUTION ---")
+    print(f"Master price matrix exported to {OUTPUT_PRICES_PATH}")
+    print(f"Matrix Dimensions: {df_prices.shape}")
