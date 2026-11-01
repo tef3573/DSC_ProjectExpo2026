@@ -105,7 +105,6 @@ if __name__ == "__main__":
     
     df_prices = pd.read_csv(PRICES_PATH, index_col=0, parse_dates=True)
     df_roster = load_clean_roster()
-    
     mask, n_t = generate_universe_mask(df_prices, df_roster, lag_days=1)
     export_universe_mask(mask)
     
