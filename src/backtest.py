@@ -5,6 +5,7 @@ Vectorized Portfolio Backtesting Engine.
 - Sub-issue #101: Dynamic routing of unallocated cash buffer into risk-free rate.
 - Sub-issue #102: Vectorized active count tracking across timeline.
 - Sub-issue #106: Inter-period weight drift calculation from asset price returns.
+- Sub-issue #107: Deduct 10 bps transaction fee on one-way turnover.
 """
 from pathlib import Path
 import logging
@@ -41,12 +42,7 @@ def compute_returns(prices: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_equal_weights(mask: pd.DataFrame, min_diversification: int = 3) -> Tuple[pd.DataFrame, pd.Series, pd.Series]:
-    """
-    Computes daily constituent weights with cash-drag concentration defense.
-    - If Nt >= 3: Fully invested equal-weight (w_i = 1 / Nt, w_cash = 0.0).
-    - If 1 <= Nt < 3: Proportional cap at 1 / min_diversification (w_i = 1/3, w_cash = (3 - Nt)/3).
-    - If Nt == 0: 100% cash allocation (w_i = 0.0, w_cash = 1.0).
-    """
+    """Computes daily constituent weights with cash-drag concentration defense."""
     n_t = mask.sum(axis=1)
     weights = pd.DataFrame(0.0, index=mask.index, columns=mask.columns)
 
@@ -80,12 +76,53 @@ def compute_weight_drift(
     return drifted_weights
 
 
+def compute_turnover_and_costs(
+    target_weights: pd.DataFrame,
+    drifted_weights: pd.DataFrame,
+    fee_bps: float = 10.0
+) -> Tuple[pd.Series, pd.Series]:
+    """
+    Sub-issue #107: Compute daily one-way portfolio turnover and transaction cost fee.
+    
+    Parameters:
+        target_weights: w_{i, t} target allocation at beginning of session t.
+        drifted_weights: w_{i, t-1}^drift allocation carried over from session t-1.
+        fee_bps: Transaction fee in basis points (default 10 bps = 0.0010).
+        
+    Returns:
+        turnover: One-way turnover Series TO_t.
+        transaction_costs: Deduction Series Fee_t = TO_t * (fee_bps / 10,000).
+    """
+    # Shift drifted weights forward by 1 day to compare against session t targets
+    prior_drifted = drifted_weights.shift(1).fillna(0.0)
+
+    # Asset-level delta absolute changes
+    stock_delta = (target_weights - prior_drifted).abs().sum(axis=1)
+
+    # Cash buffer delta absolute changes
+    prior_cash = 1.0 - prior_drifted.sum(axis=1)
+    current_cash = 1.0 - target_weights.sum(axis=1)
+    cash_delta = (current_cash - prior_cash).abs()
+
+    # One-way turnover: 0.5 * (sum(|delta_stocks|) + |delta_cash|)
+    turnover = 0.5 * (stock_delta + cash_delta)
+
+    # Fee deduction in decimal: fee_bps / 10000
+    fee_decimal = fee_bps / 10000.0
+    transaction_costs = turnover * fee_decimal
+
+    return turnover, transaction_costs
+
+
 def run_backtest(
     prices: pd.DataFrame, 
     mask: pd.DataFrame, 
-    rf_annual: float = 0.015
+    rf_annual: float = 0.015,
+    fee_bps: float = 10.0
 ) -> pd.DataFrame:
-    """Simulates portfolio returns with cash drag and risk-free return attribution."""
+    """
+    Simulates portfolio returns with cash drag and 10 bps turnover friction deduction.
+    """
     all_returns = compute_returns(prices)
     constituent_cols = [c for c in mask.columns if c in all_returns.columns]
 
@@ -94,25 +131,39 @@ def run_backtest(
 
     rf_daily = (1.0 + rf_annual) ** (1.0 / 252.0) - 1.0
 
+    # 1. Gross portfolio return
     portfolio_stock_returns = (stock_weights * stock_returns).sum(axis=1)
     portfolio_cash_returns = cash_weights * rf_daily
-    total_portfolio_returns = portfolio_stock_returns + portfolio_cash_returns
+    gross_returns = portfolio_stock_returns + portfolio_cash_returns
+
+    # 2. Inter-period weight drift (#106)
+    drifted_weights = compute_weight_drift(stock_weights, stock_returns, gross_returns)
+
+    # 3. Turnover and transaction cost deduction (#107)
+    turnover, transaction_costs = compute_turnover_and_costs(stock_weights, drifted_weights, fee_bps=fee_bps)
+
+    # 4. Net returns: R_net = R_gross - fee
+    net_returns = gross_returns - transaction_costs
 
     perf = pd.DataFrame(index=prices.index)
-    perf["Black_CEO_EW"] = total_portfolio_returns
+    perf["Black_CEO_Gross"] = gross_returns
+    perf["Transaction_Costs"] = transaction_costs
+    perf["Turnover"] = turnover
+    perf["Black_CEO_Net"] = net_returns
+    perf["Black_CEO_EW"] = net_returns  # Alias maintaining backward test compatibility
     perf["SPY"] = all_returns["SPY"] if "SPY" in all_returns.columns else 0.0
     perf["RSP"] = all_returns["RSP"] if "RSP" in all_returns.columns else 0.0
     perf["Active_Constituents"] = n_t
     perf["Cash_Weight"] = cash_weights
     perf["Stock_Weight"] = stock_weights.sum(axis=1)
 
-    perf["Black_CEO_Cumulative"] = (1.0 + perf["Black_CEO_EW"]).cumprod()
+    perf["Black_CEO_Cumulative"] = (1.0 + perf["Black_CEO_Net"]).cumprod()
     perf["SPY_Cumulative"] = (1.0 + perf["SPY"]).cumprod()
     perf["RSP_Cumulative"] = (1.0 + perf["RSP"]).cumprod()
 
     logging.info(
         f"Backtest completed ({len(perf)} sessions). "
-        f"Cumulative Multiples: Strategy={perf['Black_CEO_Cumulative'].iloc[-1]:.3f}x | "
+        f"Cumulative Multiples: Net Strategy={perf['Black_CEO_Cumulative'].iloc[-1]:.3f}x | "
         f"SPY={perf['SPY_Cumulative'].iloc[-1]:.3f}x | RSP={perf['RSP_Cumulative'].iloc[-1]:.3f}x"
     )
     return perf
@@ -128,5 +179,12 @@ def export_results(perf: pd.DataFrame, path: Path = OUTPUT_RETURNS_PATH) -> Path
 
 if __name__ == "__main__":
     df_prices, df_mask = load_inputs()
-    perf_results = run_backtest(df_prices, df_mask, rf_annual=0.015)
+    perf_results = run_backtest(df_prices, df_mask, rf_annual=0.015, fee_bps=10.0)
     export_results(perf_results)
+
+    print("\n--- SUB-ISSUE #107: TURNOVER & 10 BPS FRICTION VALIDATION ---")
+    print(f"Total Sessions: {len(perf_results)}")
+    print(f"Mean Daily Turnover: {perf_results['Turnover'].mean():.4%}")
+    print(f"Cumulative Transaction Fee Drag: {perf_results['Transaction_Costs'].sum():.4%}")
+    print(f"Final Wealth (Gross): {(1.0 + perf_results['Black_CEO_Gross']).cumprod().iloc[-1]:.3f}x")
+    print(f"Final Wealth (Net):   {perf_results['Black_CEO_Cumulative'].iloc[-1]:.3f}x")
