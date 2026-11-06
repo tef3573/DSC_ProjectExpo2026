@@ -6,6 +6,7 @@ Institutional Portfolio Performance Analytics Engine.
 """
 import numpy as np
 import pandas as pd
+from typing import Tuple
 
 """
     Sub-issue #114: Calculates annualized Sharpe Ratio with correct scaling.
@@ -91,3 +92,21 @@ def compute_sortino_ratio(
 
     annualized_downside = daily_downside * np.sqrt(periods_per_year)
     return float(annualized_mean_excess / annualized_downside)
+
+"""
+    Sub-issue #116: Computes cumulative wealth series and running drawdown percentage series.
+    
+    Returns:
+        wealth: Cumulative wealth curve normalized to 1.0.
+        drawdown: Percentage drop from peak at each session t (DD_t <= 0).
+"""
+def compute_drawdown_series(returns: pd.Series) -> Tuple[pd.Series, pd.Series]:
+    clean_returns = returns.dropna()
+    if len(clean_returns) == 0:
+        return pd.Series(dtype=float), pd.Series(dtype=float)
+
+    wealth = (1.0 + clean_returns).cumprod()
+    running_peak = wealth.cummax()
+    drawdown = (wealth - running_peak) / running_peak
+    return wealth, drawdown
+
