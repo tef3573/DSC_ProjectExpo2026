@@ -17,20 +17,19 @@ from src.metrics import (
     compute_calmar_ratio
 )
 
-
 class TestPerformanceMetrics(unittest.TestCase):
 
+    """Sub-issue #114: Assert Sharpe ratio scales mean return by 252 and volatility by sqrt(252)."""
     def test_sharpe_ratio_annualization_scaling(self):
-        """Sub-issue #114: Assert Sharpe ratio scales mean return by 252 and volatility by sqrt(252)."""
-        np.random.seed(42)
-        daily_returns = pd.Series(np.random.normal(loc=0.001, scale=0.01, size=252))
-
-        daily_mean = daily_returns.mean()
-        daily_std = daily_returns.std(ddof=1)
-        expected_sharpe = (daily_mean * 252) / (daily_std * np.sqrt(252))
-
-        calc_sharpe = compute_sharpe_ratio(daily_returns, rf_annual=0.0, periods_per_year=252)
-        self.assertAlmostEqual(calc_sharpe, expected_sharpe, places=5)
+       np.random.seed(42)
+       daily_returns = pd.Series(np.random.normal(loc=0.001, scale=0.01, size=252))
+       
+       daily_mean = daily_returns.mean()
+       daily_std = daily_returns.std(ddof=1)
+       expected_sharpe = (daily_mean * 252) / (daily_std * np.sqrt(252))
+       
+       calc_sharpe = compute_sharpe_ratio(daily_returns, rf_annual=0.0, periods_per_year=252)
+       self.assertAlmostEqual(calc_sharpe, expected_sharpe, places=5)
 
     """Sub-issue #115: Verify downside deviation divides by total length T, not down days count."""
     def test_downside_deviation_uses_total_sample_length_t(self):
@@ -80,6 +79,69 @@ class TestPerformanceMetrics(unittest.TestCase):
         calc_calmar = compute_calmar_ratio(mock_returns, periods_per_year=252)
 
         self.assertAlmostEqual(calc_calmar, expected_calmar, places=5)
+
+    """
+        Sub-issue #118: Validate all metrics against an exact 5-day hand-calculated series.
+        r = [+0.05, -0.02, +0.03, -0.04, +0.01], rf_annual = 0.0
+    """
+    def test_hand_calculated_synthetic_series(self):
+        r = pd.Series([0.05, -0.02, 0.03, -0.04, 0.01])
+        t_len = len(r)
+
+        # 1. Mean and Sample Std
+        mean_r = 0.006
+        sample_std = np.std(r.values, ddof=1)
+        expected_sharpe = (mean_r * 252.0) / (sample_std * np.sqrt(252.0))
+        calc_sharpe = compute_sharpe_ratio(r, rf_annual=0.0, periods_per_year=252)
+        self.assertAlmostEqual(calc_sharpe, expected_sharpe, places=5)
+
+        # 2. Downside Deviation: squared negative returns = (-0.02)^2 + (-0.04)^2 = 0.0004 + 0.0016 = 0.0020
+        # Divided by T=5: 0.0020 / 5 = 0.0004 -> sqrt(0.0004) = 0.0200
+        expected_downside = 0.020
+        calc_downside = compute_downside_deviation(r, rf_annual=0.0, periods_per_year=252)
+        self.assertAlmostEqual(calc_downside, expected_downside, places=6)
+
+        expected_sortino = (mean_r * 252.0) / (expected_downside * np.sqrt(252.0))
+        calc_sortino = compute_sortino_ratio(r, rf_annual=0.0, periods_per_year=252)
+        self.assertAlmostEqual(calc_sortino, expected_sortino, places=5)
+
+        # 3. Wealth & Drawdown:
+        # W = [1.05, 1.05 * 0.98 = 1.029, 1.029 * 1.03 = 1.05987, 1.05987 * 0.96 = 1.0174752, 1.0174752 * 1.01 = 1.02765]
+        # Peaks: [1.05, 1.05, 1.05987, 1.05987, 1.05987]
+        # DD: [0.0, (1.029 - 1.05)/1.05 = -0.02, 0.0, (1.0174752 - 1.05987)/1.05987 = -0.04, ...]
+        # Max Drawdown is exactly 0.04 (4.0%)
+        calc_mdd = compute_max_drawdown(r)
+        self.assertAlmostEqual(calc_mdd, 0.04, places=5)
+
+        # 4. CAGR: W_T = 1.02765, T = 5 -> (1.02765)^(252 / 5) - 1
+        expected_cagr = (1.027649952 ** (252.0 / 5.0)) - 1.0
+        calc_cagr = compute_cagr(r, periods_per_year=252)
+        self.assertAlmostEqual(calc_cagr, expected_cagr, places=4)
+
+        # 5. Calmar: CAGR / MDD
+        expected_calmar = expected_cagr / 0.04
+        calc_calmar = compute_calmar_ratio(r, periods_per_year=252)
+        self.assertAlmostEqual(calc_calmar, expected_calmar, places=3)
+
+    """Sub-issue #118: Verify flat zero-return series does not divide by zero."""
+    def test_zero_volatility_edge_case(self):
+        flat_returns = pd.Series([0.0] * 50)
+        # With zero risk-free rate hurdle:
+        self.assertEqual(compute_sharpe_ratio(flat_returns, rf_annual=0.0), 0.0)
+        self.assertEqual(compute_sortino_ratio(flat_returns, rf_annual=0.0), 0.0)
+        self.assertEqual(compute_max_drawdown(flat_returns), 0.0)
+        self.assertEqual(compute_calmar_ratio(flat_returns), 0.0)
+
+        # With positive hurdle, flat zero return has zero total volatility:
+        self.assertEqual(compute_sharpe_ratio(flat_returns, rf_annual=0.015), 0.0)
+
+    """Sub-issue #118: Verify strictly positive returns handle zero downside without crash."""
+    def test_strictly_positive_returns_edge_case(self):
+        pos_returns = pd.Series([0.01, 0.02, 0.015, 0.03, 0.005])
+        self.assertEqual(compute_downside_deviation(pos_returns, rf_annual=0.0), 0.0)
+        self.assertEqual(compute_max_drawdown(pos_returns), 0.0)
+        self.assertEqual(compute_sortino_ratio(pos_returns, rf_annual=0.0), 0.0)
+        self.assertEqual(compute_calmar_ratio(pos_returns), 0.0)
 
 
 if __name__ == "__main__":
