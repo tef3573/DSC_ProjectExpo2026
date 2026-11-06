@@ -1,13 +1,14 @@
 """
 tests/test_backtest.py
-Unit tests verifying return calculation, cash-drag concentration defense, and weight unity.
+Unit tests verifying return calculation, cash-drag concentration defense, and weight drift.
 - Sub-issue #104: Assert cash plus equity allocation weights sum to exactly 1.0.
+- Sub-issue #106: Calculate inter-period weight drift from asset price returns.
 """
 from pathlib import Path
 import unittest
 import numpy as np
 import pandas as pd
-from src.backtest import compute_equal_weights, compute_returns, run_backtest
+from src.backtest import compute_equal_weights, compute_returns, compute_weight_drift, run_backtest
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -32,7 +33,6 @@ class TestBacktestEngine(unittest.TestCase):
 
     def test_cash_plus_equity_sums_to_unity(self):
         """Sub-issue #104: Assert cash plus equity allocation weights sum to exactly 1.0."""
-        # Test varying regimes: Nt=0, Nt=1, Nt=2, Nt=3, Nt=4
         test_mask = pd.DataFrame({
             "A": [False, True,  True,  True,  True],
             "B": [False, False, True,  True,  True],
@@ -89,6 +89,20 @@ class TestBacktestEngine(unittest.TestCase):
 
         self.assertAlmostEqual(perf["Black_CEO_EW"].iloc[1], expected_daily_rf, places=5)
         self.assertAlmostEqual(perf["Cash_Weight"].iloc[1], 1.0)
+
+    def test_weight_drift_calculation(self):
+        """Sub-issue #106: Test inter-period weight drift from asset price returns."""
+        weights = pd.DataFrame({"A": [0.5], "B": [0.5]})
+        asset_returns = pd.DataFrame({"A": [1.0], "B": [0.0]})
+        portfolio_returns = pd.Series([0.5])
+
+        drifted = compute_weight_drift(weights, asset_returns, portfolio_returns)
+
+        # 0.5 * (1 + 1.0) / (1 + 0.5) = 1.0 / 1.5 = 0.6667
+        # 0.5 * (1 + 0.0) / (1 + 0.5) = 0.5 / 1.5 = 0.3333
+        self.assertAlmostEqual(drifted.loc[0, "A"], 2.0 / 3.0, places=4)
+        self.assertAlmostEqual(drifted.loc[0, "B"], 1.0 / 3.0, places=4)
+        self.assertAlmostEqual(drifted.sum(axis=1).iloc[0], 1.0, places=5)
 
 
 if __name__ == "__main__":
