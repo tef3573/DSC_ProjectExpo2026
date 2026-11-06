@@ -1,39 +1,36 @@
-# Base Backtest Engine Specification
+# Backtest Engine: Cash-Drag Concentration Defense
 
 ## Overview
-The base backtesting engine (`src/backtest.py`) implements a point-in-time, vectorized return simulation for the dynamic Black CEO equity universe.
+When active constituent count $N_t$ is low, standard equal-weighting ($1/N_t$) produces single-stock concentration risk. The engine enforces a minimum diversification threshold ($K = 3$) by scaling equity exposure and allocating unassigned capital to cash.
 
 ---
 
 ## Mathematical Formulation
 
-### 1. Constituent Returns
-Daily simple arithmetic return for asset $i$ on trading day $t$:
-
-$$r_{i, t} = \frac{P_{i, t}}{P_{i, t-1}} - 1$$
-
-Where $P_{i, t}$ is the split- and dividend-adjusted closing price from `prices_daily.csv`.
-
-### 2. Dynamic Equal-Weight Allocation ($1/N_t$)
-Given the lagged investability mask $M_{t, i} \in \{0, 1\}$, the active constituent count is:
+### 1. Vectorized Active Count ($N_t$)
+For each session $t$:
 
 $$N_t = \sum_{i=1}^{|\mathcal{U}|} M_{t, i}$$
 
-Constituent asset weights $w_{i, t}$ are defined by:
+### 2. Proportional Equity Scaling ($N_t < 3$)
+Constituent weight $w_{i, t}$ for eligible asset $i$ is governed by:
 
-$$w_{i, t} = \begin{cases} \frac{1}{N_t}, & \text{if } M_{t, i} = 1 \text{ and } N_t > 0 \\ 0, & \text{otherwise} \end{cases}$$
+$$w_{i, t} = \begin{cases} 
+\frac{1}{N_t}, & \text{if } N_t \ge 3 \;\land\; M_{t, i} = 1 \\ 
+\frac{1}{3}, & \text{if } 1 \le N_t < 3 \;\land\; M_{t, i} = 1 \\ 
+0, & \text{otherwise} 
+\end{cases}$$
 
-### 3. Dynamic Cash Drag Allocation ($N_t = 0$)
-When no constituent CEOs meet the active tenure criteria ($N_t = 0$), portfolio capital is held in cash:
+### 3. Cash Buffer Allocation
+Total equity exposure and residual cash buffer satisfy:
 
-$$w_{\text{cash}, t} = 1 - \sum_{i=1}^{|\mathcal{U}|} w_{i, t}$$
+$$W_{\text{equity}, t} = \sum_{i=1}^{|\mathcal{U}|} w_{i, t} = \begin{cases} 1.0, & N_t \ge 3 \\ \frac{N_t}{3}, & 1 \le N_t < 3 \\ 0.0, & N_t = 0 \end{cases}$$
 
-The daily risk-free rate $R_{f, \text{daily}}$ is derived from the annual risk-free yield $R_{f, \text{annual}}$ assuming 252 trading sessions:
+$$w_{\text{cash}, t} = 1.0 - W_{\text{equity}, t}$$
+
+### 4. Risk-Free Yield Routing
+Unallocated cash earns the daily risk-free rate derived from annual yield $R_{f, \text{annual}}$:
 
 $$R_{f, \text{daily}} = (1 + R_{f, \text{annual}})^{\frac{1}{252}} - 1$$
 
-### 4. Total Daily Portfolio Return
 $$R_{p, t} = \sum_{i=1}^{|\mathcal{U}|} w_{i, t} \cdot r_{i, t} + w_{\text{cash}, t} \cdot R_{f, \text{daily}}$$
-
-### 5. Cumulative Compounding Wealth Series
-$$W_t = W_0 \cdot \prod_{\tau=1}^t (1 + R_{p, \tau}) \quad \text{with } W_0 = 1.0$$

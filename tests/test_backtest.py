@@ -1,7 +1,7 @@
 """
 tests/test_backtest.py
-Unit tests verifying return calculation, equal-weighting, and single-asset boundary cases.
-- Sub-issue #98: Test portfolio gross returns against single-asset boundary cases.
+Unit tests verifying return calculation, cash-drag concentration defense, and weight unity.
+- Sub-issue #104: Assert cash plus equity allocation weights sum to exactly 1.0.
 """
 from pathlib import Path
 import unittest
@@ -17,38 +17,8 @@ MASK_PATH = DATA_DIR / "universe_mask.csv"
 
 class TestBacktestEngine(unittest.TestCase):
 
-    def test_single_asset_boundary_case(self):
-        """
-        Sub-issue #98: When Nt == 1 for an asset, portfolio return must match that asset's return.
-        """
-        dates = pd.date_range("2020-01-01", periods=5, freq="B")
-        test_prices = pd.DataFrame({
-            "ABC": [100.0, 105.0, 102.0, 110.0, 115.0],
-            "XYZ": [50.0, 50.0, 50.0, 50.0, 50.0],
-            "SPY": [300.0, 303.0, 301.0, 305.0, 310.0],
-            "RSP": [100.0, 101.0, 100.5, 102.0, 103.0],
-        }, index=dates)
-
-        test_mask = pd.DataFrame({
-            "ABC": [True, True, True, True, True],
-            "XYZ": [False, False, False, False, False],
-        }, index=dates)
-
-        perf = run_backtest(test_prices, test_mask)
-        expected_returns = test_prices["ABC"].pct_change().fillna(0.0)
-
-        # Match strategy column dynamically across naming variants
-        strat_col = next((c for c in perf.columns if "Black_CEO" in c or "Strategy" in c or "Portfolio" in c), perf.columns[0])
-
-        np.testing.assert_allclose(
-            perf[strat_col].values,
-            expected_returns.values,
-            rtol=1e-5,
-            err_msg="Single asset portfolio return did not equal constituent return"
-        )
-
     def test_compute_returns_integrity(self):
-        """Verify compute_returns computes arithmetic percentage changes cleanly."""
+        """Verify arithmetic percentage return calculation."""
         test_prices = pd.DataFrame({
             "A": [100.0, 110.0, 99.0],
             "B": [50.0, 50.0, 55.0]
@@ -60,28 +30,65 @@ class TestBacktestEngine(unittest.TestCase):
         self.assertAlmostEqual(rets.iloc[1]["B"], 0.0)
         self.assertAlmostEqual(rets.iloc[2]["B"], 0.10)
 
-    def test_equal_weights_properties(self):
-        """Verify compute_equal_weights handles active constituent scaling."""
+    def test_cash_plus_equity_sums_to_unity(self):
+        """Sub-issue #104: Assert cash plus equity allocation weights sum to exactly 1.0."""
+        # Test varying regimes: Nt=0, Nt=1, Nt=2, Nt=3, Nt=4
         test_mask = pd.DataFrame({
-            "A": [True, False, False],
-            "B": [True, True, False]
+            "A": [False, True,  True,  True,  True],
+            "B": [False, False, True,  True,  True],
+            "C": [False, False, False, True,  True],
+            "D": [False, False, False, False, True],
         })
-        weights_res = compute_equal_weights(test_mask)
+        stock_w, cash_w, n_t = compute_equal_weights(test_mask, min_diversification=3)
 
-        # Unpack tuple or DataFrame return
-        weights = weights_res[0] if isinstance(weights_res, tuple) else weights_res
+        total_weights = stock_w.sum(axis=1) + cash_w
+        np.testing.assert_allclose(
+            total_weights.values,
+            np.ones(len(total_weights)),
+            rtol=1e-6,
+            err_msg="Cash plus equity weights did not sum to 1.0 across all regimes"
+        )
 
-        # Day 0: 2 active -> 0.5 each
-        self.assertAlmostEqual(weights.loc[0, "A"], 0.5)
-        self.assertAlmostEqual(weights.loc[0, "B"], 0.5)
+    def test_proportional_scaling_when_nt_less_than_three(self):
+        """Sub-issue #100: Validate equity capping at 1/3 when Nt < 3."""
+        test_mask = pd.DataFrame({
+            "A": [True,  True,  True],
+            "B": [False, True,  True],
+            "C": [False, False, True]
+        })
+        stock_w, cash_w, n_t = compute_equal_weights(test_mask, min_diversification=3)
 
-        # Day 1: 1 active -> 1.0 for B, 0.0 for A
-        self.assertAlmostEqual(weights.loc[1, "A"], 0.0)
-        self.assertAlmostEqual(weights.loc[1, "B"], 1.0)
+        # Session 0: Nt = 1 -> Stock A = 1/3, Cash = 2/3
+        self.assertAlmostEqual(stock_w.loc[0, "A"], 1.0 / 3.0)
+        self.assertAlmostEqual(cash_w.loc[0], 2.0 / 3.0)
 
-        # Day 2: 0 active -> 0.0 each
-        self.assertAlmostEqual(weights.loc[2, "A"], 0.0)
-        self.assertAlmostEqual(weights.loc[2, "B"], 0.0)
+        # Session 1: Nt = 2 -> Stock A = 1/3, Stock B = 1/3, Cash = 1/3
+        self.assertAlmostEqual(stock_w.loc[1, "A"], 1.0 / 3.0)
+        self.assertAlmostEqual(stock_w.loc[1, "B"], 1.0 / 3.0)
+        self.assertAlmostEqual(cash_w.loc[1], 1.0 / 3.0)
+
+        # Session 2: Nt = 3 -> Stock A = 1/3, Stock B = 1/3, Stock C = 1/3, Cash = 0.0
+        self.assertAlmostEqual(stock_w.loc[2, "A"], 1.0 / 3.0)
+        self.assertAlmostEqual(stock_w.loc[2, "B"], 1.0 / 3.0)
+        self.assertAlmostEqual(stock_w.loc[2, "C"], 1.0 / 3.0)
+        self.assertAlmostEqual(cash_w.loc[2], 0.0)
+
+    def test_run_backtest_cash_drag_effect(self):
+        """Sub-issue #101: Test portfolio return incorporates rf on zero active dates."""
+        dates = pd.date_range("2020-01-01", periods=3, freq="B")
+        test_prices = pd.DataFrame({
+            "A": [100.0, 100.0, 100.0],
+            "SPY": [300.0, 301.0, 302.0],
+            "RSP": [100.0, 100.0, 100.0],
+        }, index=dates)
+        test_mask = pd.DataFrame({"A": [False, False, False]}, index=dates)
+
+        rf_annual = 0.0252
+        perf = run_backtest(test_prices, test_mask, rf_annual=rf_annual)
+        expected_daily_rf = (1.0 + rf_annual) ** (1.0 / 252.0) - 1.0
+
+        self.assertAlmostEqual(perf["Black_CEO_EW"].iloc[1], expected_daily_rf, places=5)
+        self.assertAlmostEqual(perf["Cash_Weight"].iloc[1], 1.0)
 
 
 if __name__ == "__main__":
