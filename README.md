@@ -1,7 +1,6 @@
 # Black CEO Equity Strategy: Quantitative Alpha & Factor Attribution
-An institutional-grade, survivorship-bias-free quantitative backtesting engine evaluating whether a dynamic portfolio of Black CEO-led publicly traded US corporations exhibits risk-adjusted excess returns ($\alpha > 0$) relative to market cap-weighted (`SPY`) and equal-weighted (`RSP`) S&P 500 benchmarks.
 
-An institutional-grade, point-in-time quantitative backtesting engine modeling excess return and risk attribution of a dynamic equity portfolio composed of Black Fortune 500 & S&P 500 CEOs from 2000 through October 2026.
+#### An institutional-grade, survivorship-bias-free, point-in-time quantitative backtesting engine modeling excess return and risk attribution of a dynamic equity portfolio composed of Black Fortune 500 & S&P 500 CEOs using risk-adjusted excess returns ($\alpha > 0$) relative to market cap-weighted (`SPY`) and equal-weighted (`RSP`) S&P 500 benchmarks from 2000 through October 2026.
 ---
 
 ## Research Hypotheses
@@ -20,9 +19,27 @@ An institutional-grade, point-in-time quantitative backtesting engine modeling e
 5. **Decoupled Dual Benchmarking:** Compares performance against cap-weighted S&P 500 (`SPY`) across the entire horizon (2000–2026) and against equal-weighted S&P 500 (`RSP`) post-May 2003 (RSP inception date) to prevent flat-line distortions.
 
 ---
+## Milestone 1 Status: Verified & Frozen (v0.1.0)
+
+| Requirement | Implementation Details | Status |
+| :--- | :--- | :--- |
+| **Audited Universe** | 21 unique executive tenures across large/mid-cap equities | Verified |
+| **Market Data Ingestion** | Automated Yahoo Finance batch engine (`2000-01-01` to current) | Verified |
+| **Corporate Action Defense** | `QVCG` continuity fallback merged into `QRTEA` | Verified |
+| **Survivorship-Bias Defense** | Merged delisted archive (`data/delisted/JCP.csv`) | Verified |
+| **Trading Calendar** | Reindexed to `SPY` (6,748 sessions, 5-day bounded forward-fill) | Verified |
+| **Execution Lag** | Strict $t+1$ shift applied to eliminate look-ahead bias | Verified |
+
+---
+
+
+## Test Verification
+```text
+bash
+python3 -m unittest discover -s tests -v
 
 ## Architecture Overview
-```text
+
 .
 ├── data/
 │   ├── black_ceo_roster.csv     # Audited executive tenure roster (21 entries)
@@ -45,21 +62,3 @@ An institutional-grade, point-in-time quantitative backtesting engine modeling e
 ├── requirements.txt             # Pinned environment dependencies
 ├── web/                        
 └── README.md
-
----
-## Milestone 1 Status: Verified & Frozen (v0.1.0)
-
-| Requirement | Implementation Details | Status |
-| :--- | :--- | :--- |
-| **Audited Universe** | 21 unique executive tenures across large/mid-cap equities | Verified |
-| **Market Data Ingestion** | Automated Yahoo Finance batch engine (`2000-01-01` to current) | Verified |
-| **Corporate Action Defense** | `QVCG` continuity fallback merged into `QRTEA` | Verified |
-| **Survivorship-Bias Defense** | Merged delisted archive (`data/delisted/JCP.csv`) | Verified |
-| **Trading Calendar** | Reindexed to `SPY` (6,748 sessions, 5-day bounded forward-fill) | Verified |
-| **Execution Lag** | Strict $t+1$ shift applied to eliminate look-ahead bias | Verified |
-
----
-## Test Verification
-
-```bash
-python3 -m unittest discover -s tests -v

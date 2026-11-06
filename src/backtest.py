@@ -143,9 +143,9 @@ def run_backtest(
     perf["RSP"] = all_returns["RSP"] if "RSP" in all_returns.columns else 0.0
     perf["Active_Constituents"] = n_t
     perf["Cash_Weight"] = cash_weights
-    perf["Stock_Weight"] = stock_weights.sum(axis=1)
 
-    perf["Black_CEO_Cumulative"] = (1.0 + perf["Black_CEO_Net"]).cumprod()
+    # Cumulative wealth series (normalized to $1.00 base)
+    perf["Black_CEO_Cumulative"] = (1.0 + perf["Black_CEO_EW"]).cumprod()
     perf["SPY_Cumulative"] = (1.0 + perf["SPY"]).cumprod()
     perf["RSP_Cumulative"] = (1.0 + perf["RSP"]).cumprod()
 
