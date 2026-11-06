@@ -121,3 +121,35 @@ def compute_max_drawdown(returns: pd.Series) -> float:
     min_dd = float(drawdown.min())
     return abs(min_dd)
 
+"""
+    Sub-issue #116: Computes Compound Annual Growth Rate (CAGR).
+    Formula: W_T^(252 / T) - 1
+"""
+def compute_cagr(returns: pd.Series, periods_per_year: int = 252) -> float:
+    clean_returns = returns.dropna()
+    t_total = len(clean_returns)
+    if t_total == 0:
+        return 0.0
+
+    final_wealth = float((1.0 + clean_returns).prod())
+    if final_wealth <= 0.0:
+        return -1.0
+
+    years = t_total / float(periods_per_year)
+    cagr = (final_wealth ** (1.0 / years)) - 1.0
+    return float(cagr)
+
+"""
+    Sub-issue #116: Computes Calmar Ratio (CAGR / |MDD|).
+    returns 0.0 if MDD is zero to avoid division by zero.
+"""
+def compute_calmar_ratio(
+    returns: pd.Series,
+    periods_per_year: int = 252
+) -> float:
+    mdd = compute_max_drawdown(returns)
+    if mdd == 0.0:
+        return 0.0
+
+    cagr = compute_cagr(returns, periods_per_year=periods_per_year)
+    return float(cagr / mdd)
