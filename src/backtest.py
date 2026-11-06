@@ -122,6 +122,35 @@ def export_results(perf: pd.DataFrame, path: Path = OUTPUT_RETURNS_PATH) -> Path
     logging.info(f"Saved portfolio daily returns to: {path}")
     return path
 
+# rebalance sessions t and t+1, asset allocations drift as individual stock prices fluctuate. 
+def compute_weight_drift(
+    weights: pd.DataFrame, 
+    asset_returns: pd.DataFrame, 
+    portfolio_returns: pd.Series
+) -> pd.DataFrame:
+    """
+    Sub-issue #106: Calculate inter-period weight drift from asset price returns.
+    
+    Parameters:
+        weights: Target allocation matrix w_{i, t} at start of day t.
+        asset_returns: Daily constituent asset arithmetic returns r_{i, t}.
+        portfolio_returns: Total gross portfolio returns R_{p, t}.
+        
+    Returns:
+        drifted_weights: End-of-period weight matrix w_{i, t}^drift before rebalancing to t+1.
+    """
+    # Numerator: w_{i, t} * (1 + r_{i, t})
+    growth_per_asset = weights * (1.0 + asset_returns)
+    
+    # Denominator: (1 + R_{p, t})
+    growth_portfolio = 1.0 + portfolio_returns
+    
+    # Avoid zero division if portfolio drops 100%
+    safe_growth_portfolio = growth_portfolio.replace(0.0, np.nan)
+    
+    drifted_weights = growth_per_asset.div(safe_growth_portfolio, axis=0).fillna(0.0)
+    return drifted_weights
+
 
 if __name__ == "__main__":
     df_prices, df_mask = load_inputs()
