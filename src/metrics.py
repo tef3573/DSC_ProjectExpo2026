@@ -110,3 +110,14 @@ def compute_drawdown_series(returns: pd.Series) -> Tuple[pd.Series, pd.Series]:
     drawdown = (wealth - running_peak) / running_peak
     return wealth, drawdown
 
+"""
+    Sub-issue #116: Computes Maximum Drawdown (MDD) as an absolute positive decimal.
+    Formula: |min(DD_t)|
+"""
+def compute_max_drawdown(returns: pd.Series) -> float:
+    _, drawdown = compute_drawdown_series(returns)
+    if len(drawdown) == 0:
+        return 0.0
+    min_dd = float(drawdown.min())
+    return abs(min_dd)
+
