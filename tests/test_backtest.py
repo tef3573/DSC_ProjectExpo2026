@@ -4,6 +4,7 @@ Unit tests verifying return calculation, cash-drag defense, weight drift, and tu
 - Sub-issue #104: Assert cash plus equity allocation weights sum to exactly 1.0.
 - Sub-issue #106: Calculate inter-period weight drift from asset price returns.
 - Sub-issue #107: Deduct 10 bps transaction fee on one-way turnover.
+- Sub-issue #108: Adjust turnover formulation for initial position inception.
 """
 from pathlib import Path
 import unittest
@@ -65,15 +66,22 @@ class TestBacktestEngine(unittest.TestCase):
 
     def test_deduct_ten_bps_transaction_fee(self):
         """Sub-issue #107: Deduct exactly 10 bps (0.0010) per 100% one-way turnover."""
-        # 100% turnover rebalance (A=1.0 -> B=1.0)
         target = pd.DataFrame({"A": [1.0, 0.0], "B": [0.0, 1.0]})
         drifted = pd.DataFrame({"A": [1.0, 0.0], "B": [0.0, 1.0]})
 
         turnover, costs = compute_turnover_and_costs(target, drifted, fee_bps=10.0)
-
-        # On day 1 rebalance: turnover is 1.0, fee is 10 bps (0.0010)
         self.assertAlmostEqual(turnover.iloc[1], 1.0, places=5)
         self.assertAlmostEqual(costs.iloc[1], 0.0010, places=5)
+
+    def test_initial_inception_turnover_is_zero(self):
+        """Sub-issue #108: Verify initial position inception at t=0 has zero turnover and fee."""
+        target = pd.DataFrame({"A": [0.5, 0.5], "B": [0.5, 0.5]})
+        drifted = pd.DataFrame({"A": [0.5, 0.5], "B": [0.5, 0.5]})
+
+        turnover, costs = compute_turnover_and_costs(target, drifted, fee_bps=10.0)
+
+        self.assertEqual(turnover.iloc[0], 0.0, "Day 0 turnover must be exactly 0.0")
+        self.assertEqual(costs.iloc[0], 0.0, "Day 0 transaction costs must be exactly 0.0")
 
 
 if __name__ == "__main__":

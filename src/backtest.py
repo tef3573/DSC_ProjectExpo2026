@@ -6,6 +6,7 @@ Vectorized Portfolio Backtesting Engine.
 - Sub-issue #102: Vectorized active count tracking across timeline.
 - Sub-issue #106: Inter-period weight drift calculation from asset price returns.
 - Sub-issue #107: Deduct 10 bps transaction fee on one-way turnover.
+- Sub-issue #108: Adjust turnover formulation for initial position inception (TO_0 = 0).
 """
 from pathlib import Path
 import logging
@@ -82,32 +83,24 @@ def compute_turnover_and_costs(
     fee_bps: float = 10.0
 ) -> Tuple[pd.Series, pd.Series]:
     """
-    Sub-issue #107: Compute daily one-way portfolio turnover and transaction cost fee.
-    
-    Parameters:
-        target_weights: w_{i, t} target allocation at beginning of session t.
-        drifted_weights: w_{i, t-1}^drift allocation carried over from session t-1.
-        fee_bps: Transaction fee in basis points (default 10 bps = 0.0010).
-        
-    Returns:
-        turnover: One-way turnover Series TO_t.
-        transaction_costs: Deduction Series Fee_t = TO_t * (fee_bps / 10,000).
+    Sub-issues #107 & #108: Compute daily one-way portfolio turnover and transaction cost fee.
+    Fix #108: Inception turnover at t=0 is forced to 0.0 to prevent artificial startup friction.
     """
-    # Shift drifted weights forward by 1 day to compare against session t targets
     prior_drifted = drifted_weights.shift(1).fillna(0.0)
 
-    # Asset-level delta absolute changes
     stock_delta = (target_weights - prior_drifted).abs().sum(axis=1)
 
-    # Cash buffer delta absolute changes
     prior_cash = 1.0 - prior_drifted.sum(axis=1)
     current_cash = 1.0 - target_weights.sum(axis=1)
     cash_delta = (current_cash - prior_cash).abs()
 
     # One-way turnover: 0.5 * (sum(|delta_stocks|) + |delta_cash|)
-    turnover = 0.5 * (stock_delta + cash_delta)
+    turnover = (0.5 * (stock_delta + cash_delta)).copy()
 
-    # Fee deduction in decimal: fee_bps / 10000
+    # Sub-issue #108: Force Day 0 to 0.0 (inception capitalization is not trading turnover)
+    if len(turnover) > 0:
+        turnover.iloc[0] = 0.0
+
     fee_decimal = fee_bps / 10000.0
     transaction_costs = turnover * fee_decimal
 
@@ -131,18 +124,13 @@ def run_backtest(
 
     rf_daily = (1.0 + rf_annual) ** (1.0 / 252.0) - 1.0
 
-    # 1. Gross portfolio return
     portfolio_stock_returns = (stock_weights * stock_returns).sum(axis=1)
     portfolio_cash_returns = cash_weights * rf_daily
     gross_returns = portfolio_stock_returns + portfolio_cash_returns
 
-    # 2. Inter-period weight drift (#106)
     drifted_weights = compute_weight_drift(stock_weights, stock_returns, gross_returns)
-
-    # 3. Turnover and transaction cost deduction (#107)
     turnover, transaction_costs = compute_turnover_and_costs(stock_weights, drifted_weights, fee_bps=fee_bps)
 
-    # 4. Net returns: R_net = R_gross - fee
     net_returns = gross_returns - transaction_costs
 
     perf = pd.DataFrame(index=prices.index)
@@ -150,7 +138,7 @@ def run_backtest(
     perf["Transaction_Costs"] = transaction_costs
     perf["Turnover"] = turnover
     perf["Black_CEO_Net"] = net_returns
-    perf["Black_CEO_EW"] = net_returns  # Alias maintaining backward test compatibility
+    perf["Black_CEO_EW"] = net_returns
     perf["SPY"] = all_returns["SPY"] if "SPY" in all_returns.columns else 0.0
     perf["RSP"] = all_returns["RSP"] if "RSP" in all_returns.columns else 0.0
     perf["Active_Constituents"] = n_t
@@ -182,9 +170,9 @@ if __name__ == "__main__":
     perf_results = run_backtest(df_prices, df_mask, rf_annual=0.015, fee_bps=10.0)
     export_results(perf_results)
 
-    print("\n--- SUB-ISSUE #107: TURNOVER & 10 BPS FRICTION VALIDATION ---")
+    print("\n--- SUB-ISSUE #108: INCEPTION ADJUSTED TURNOVER VALIDATION ---")
     print(f"Total Sessions: {len(perf_results)}")
-    print(f"Mean Daily Turnover: {perf_results['Turnover'].mean():.4%}")
-    print(f"Cumulative Transaction Fee Drag: {perf_results['Transaction_Costs'].sum():.4%}")
-    print(f"Final Wealth (Gross): {(1.0 + perf_results['Black_CEO_Gross']).cumprod().iloc[-1]:.3f}x")
-    print(f"Final Wealth (Net):   {perf_results['Black_CEO_Cumulative'].iloc[-1]:.3f}x")
+    print(f"Day 0 Turnover: {perf_results['Turnover'].iloc[0]:.6f}")
+    print(f"Day 0 Transaction Cost: {perf_results['Transaction_Costs'].iloc[0]:.6f}")
+    print(f"Mean Daily Turnover (t >= 1): {perf_results['Turnover'].iloc[1:].mean():.4%}")
+    print(f"Final Wealth (Net): {perf_results['Black_CEO_Cumulative'].iloc[-1]:.3f}x")
