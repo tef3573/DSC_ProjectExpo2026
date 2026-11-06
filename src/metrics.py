@@ -152,4 +152,4 @@ def compute_calmar_ratio(
         return 0.0
 
     cagr = compute_cagr(returns, periods_per_year=periods_per_year)
-    return float(cagr / mdd)
+    return float(cagr / mdd) 
