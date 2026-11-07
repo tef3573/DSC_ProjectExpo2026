@@ -6,7 +6,7 @@ Institutional Portfolio Performance Analytics Engine.
 """
 import numpy as np
 import pandas as pd
-from typing import Tuple
+from typing import Any, Dict, Tuple
 
 """
     Sub-issue #114: Calculates annualized Sharpe Ratio with correct scaling.
@@ -153,3 +153,78 @@ def compute_calmar_ratio(
 
     cagr = compute_cagr(returns, periods_per_year=periods_per_year)
     return float(cagr / mdd) 
+
+
+"""
+    Sub-issue #120: Aligns strategy and benchmark series on an identical calendar window.
+"""
+def align_benchmark_series(
+    strategy_returns: pd.Series,
+    benchmark_returns: pd.Series,
+    start_date: str = None,
+    end_date: str = None
+) -> Tuple[pd.Series, pd.Series]:
+        df = pd.DataFrame({"strategy": strategy_returns, "benchmark": benchmark_returns}).dropna()
+        if start_date is not None:
+            df = df.loc[df.index >= pd.to_datetime(start_date)]
+        if end_date is not None:
+            df = df.loc[df.index <= pd.to_datetime(end_date)]
+        return df["strategy"], df["benchmark"]
+
+
+"""
+    Sub-issue #120: Computes comparative institutional metrics against a reference benchmark.
+    Returns: CAGR, Volatility, Sharpe, Max Drawdown, Beta, Alpha, and Tracking Error.
+"""
+def compute_benchmark_metrics(
+    strategy_returns: pd.Series,
+    benchmark_returns: pd.Series,
+    rf_annual: float = 0.015,
+    periods_per_year: int = 252
+) -> Dict[str, Any]:
+    strat, bench = align_benchmark_series(strategy_returns, benchmark_returns)
+    if len(strat) < 2:
+        return {}
+
+    # Annualized CAGR & Vol
+    strat_cagr = compute_cagr(strat, periods_per_year=periods_per_year)
+    bench_cagr = compute_cagr(bench, periods_per_year=periods_per_year)
+    strat_vol = float(strat.std(ddof=1) * np.sqrt(periods_per_year))
+    bench_vol = float(bench.std(ddof=1) * np.sqrt(periods_per_year))
+
+    # Sharpe ratios
+    strat_sharpe = compute_sharpe_ratio(strat, rf_annual=rf_annual, periods_per_year=periods_per_year)
+    bench_sharpe = compute_sharpe_ratio(bench, rf_annual=rf_annual, periods_per_year=periods_per_year)
+
+    # Max Drawdowns
+    strat_mdd = compute_max_drawdown(strat)
+    bench_mdd = compute_max_drawdown(bench)
+    
+    # Beta and Alpha (OLS regression)
+    covariance = np.cov(strat.values, bench.values)[0, 1]
+    bench_variance = np.var(bench.values, ddof=1)
+    beta = float(covariance / bench_variance) if bench_variance > 0 else 1.0
+
+    rf_daily = (1.0 + rf_annual) ** (1.0 / periods_per_year) - 1.0
+    alpha_annual = float(((strat.mean() - rf_daily) - beta * (bench.mean() - rf_daily)) * periods_per_year)
+
+    # Tracking error (annualized std of return spread)
+    diff = strat - bench
+    tracking_error = float(diff.std(ddof=1) * np.sqrt(periods_per_year))
+    
+    return {
+        "observations": len(strat),
+        "start_date": str(strat.index[0].date()) if hasattr(strat.index[0], "date") else str(strat.index[0]),
+        "end_date": str(strat.index[-1].date()) if hasattr(strat.index[-1], "date") else str(strat.index[-1]),
+        "strategy_cagr": strat_cagr,
+        "benchmark_cagr": bench_cagr,
+        "strategy_volatility": strat_vol,
+        "benchmark_volatility": bench_vol,
+        "strategy_sharpe": strat_sharpe,
+        "benchmark_sharpe": bench_sharpe,
+        "strategy_mdd": strat_mdd,
+        "benchmark_mdd": bench_mdd,
+        "beta": beta,
+        "alpha_annual": alpha_annual,
+        "tracking_error": tracking_error
+    }
