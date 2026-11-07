@@ -4,6 +4,7 @@ Unit tests verifying benchmark window decoupling and alignment.
 - Sub-issue #120: Align SPY cap-weighted comparison across full 2000-2026 horizon.
 - Sub-issue #121: Isolate RSP equal-weighted comparison starting May 1, 2003.
 - Sub-issue #122: Filter pre-inception zero-return entries from RSP metrics.
+- Sub-issue #124: Confirm RSP annualized volatility matches market ground truth.
 """
 from pathlib import Path
 import unittest
@@ -76,32 +77,53 @@ class TestBenchmarkWindowDecoupling(unittest.TestCase):
         self.assertGreater(metrics["observations"], 5000)
 
     def test_filter_pre_inception_zero_returns(self):
-        """
-        Sub-issue #122: Verify pre-inception synthetic zeros are filtered out
-        and do not artificially dilute RSP volatility.
-        """
-        # Create dates from 2000-01-01 to 2004-01-01
+        """Sub-issue #122: Verify pre-inception synthetic zeros are filtered out."""
         dates = pd.date_range("2000-01-01", "2004-01-01", freq="B")
         np.random.seed(42)
 
-        # RSP has 0.0 until 2003-05-01, then real volatility
         rsp_raw = pd.Series(0.0, index=dates)
         post_mask = dates >= pd.to_datetime(RSP_INCEPTION_DATE)
         rsp_raw.loc[post_mask] = np.random.normal(loc=0.0004, scale=0.012, size=post_mask.sum())
 
         strat_raw = pd.Series(np.random.normal(loc=0.0005, scale=0.015, size=len(dates)), index=dates)
 
-        # If uncleaned raw series is used:
         uncleaned_vol = rsp_raw.std(ddof=1) * np.sqrt(252)
-
-        # Isolate and filter:
         strat_clean, rsp_clean = isolate_rsp_benchmark_series(strat_raw, rsp_raw)
         cleaned_vol = rsp_clean.std(ddof=1) * np.sqrt(252)
 
-        # Cleaned volatility must be significantly higher than artificially diluted uncleaned volatility
         self.assertGreater(cleaned_vol, uncleaned_vol)
         self.assertGreaterEqual(rsp_clean.index[0], pd.to_datetime(RSP_INCEPTION_DATE))
         self.assertFalse((rsp_clean == 0.0).all())
+
+    def test_rsp_annualized_volatility_matches_market_ground_truth(self):
+        """
+        Sub-issue #124: Confirm RSP annualized volatility on isolated post-inception window
+        matches institutional market ground truth (~16% to 22%) and exceeds cap-weighted SPY volatility.
+        """
+        if not PORTFOLIO_RETURNS_PATH.exists():
+            self.skipTest(f"Missing {PORTFOLIO_RETURNS_PATH}")
+
+        df = pd.read_csv(PORTFOLIO_RETURNS_PATH, index_col=0, parse_dates=True)
+        self.assertIn("RSP", df.columns)
+        self.assertIn("SPY", df.columns)
+
+        # Isolate RSP and SPY over the concurrent post-May 2003 window
+        _, rsp_series = isolate_rsp_benchmark_series(df["Black_CEO_Net"], df["RSP"])
+        spy_concurrent = df.loc[rsp_series.index, "SPY"]
+
+        rsp_ann_vol = float(rsp_series.std(ddof=1) * np.sqrt(252))
+        spy_ann_vol = float(spy_concurrent.std(ddof=1) * np.sqrt(252))
+
+        # Ground truth check: 16% <= RSP annual vol <= 22%
+        self.assertGreaterEqual(rsp_ann_vol, 0.160, f"RSP volatility {rsp_ann_vol:.4f} was below 16% threshold")
+        self.assertLessEqual(rsp_ann_vol, 0.220, f"RSP volatility {rsp_ann_vol:.4f} exceeded 22% threshold")
+
+        # Equal-weight S&P 500 volatility must exceed cap-weighted S&P 500 volatility
+        self.assertGreater(
+            rsp_ann_vol,
+            spy_ann_vol,
+            f"RSP volatility ({rsp_ann_vol:.4f}) should exceed SPY volatility ({spy_ann_vol:.4f})"
+        )
 
 
 if __name__ == "__main__":
