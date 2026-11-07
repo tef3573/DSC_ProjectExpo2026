@@ -16,6 +16,9 @@ from typing import Any, Dict, Tuple
         sigma_annual = std(r, ddof=1) * sqrt(252)
         Sharpe = mu_excess_annual / sigma_annual
 """
+
+RSP_INCEPTION_DATE = "2003-05-01"
+
 def compute_sharpe_ratio(
     returns: pd.Series,
     rf_annual: float = 0.015,
@@ -170,6 +173,26 @@ def align_benchmark_series(
         if end_date is not None:
             df = df.loc[df.index <= pd.to_datetime(end_date)]
         return df["strategy"], df["benchmark"]
+
+"""
+    Sub-issue #121: Isolates strategy and RSP equal-weighted benchmark starting at RSP inception.
+    Default inception anchor: May 1, 2003 (2003-05-01).
+"""
+def isolate_rsp_benchmark_series(
+    strategy_returns: pd.Series,
+    rsp_returns: pd.Series,
+    inception_date: str = RSP_INCEPTION_DATE
+) -> Tuple[pd.Series, pd.Series]:
+    return align_benchmark_series(strategy_returns, rsp_returns, start_date=inception_date)
+
+
+
+
+
+
+
+
+
 
 
 """
