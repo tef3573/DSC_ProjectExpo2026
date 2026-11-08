@@ -32,6 +32,17 @@
 
 ---
 
+## Milestone 2 Completed Architecture (November 2026)
+* **Vectorized Backtest Engine**: Point-in-time universe masking with $t+1$ trading lag.
+* **Concentration Defense**: Automatic cash-drag reallocation when active constituents $N_t < 3$.
+* **Institutional Friction**: Daily price-return weight drift tracking with 10 bps turnover friction deduction.
+* **Decoupled Dual Benchmarks**:
+  - `SPY` (Cap-Weighted): Full 2000–2026 macro comparison.
+  - `RSP` (Equal-Weighted): Isolated post-May 1, 2003 inception window filtering synthetic zero returns.
+* **Artifacts & Scorecards**: Continuous daily CSV export (`data/backtest_results.csv`), JSON metrics export (`data/summary_metrics.json`), and formatted terminal scorecard tables.
+* **Test Suite**: 30 comprehensive unit and integration tests passing.
+ 
+---
 
 ## Test Verification
 ```text

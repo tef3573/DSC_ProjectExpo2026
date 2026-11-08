@@ -1,0 +1,57 @@
+{
+    "metadata": {
+        "strategy_name": "Black CEO Equal-Weight Portfolio",
+        "backtest_start": "2000-01-03",
+        "backtest_end": "2026-11-02",
+        "trading_sessions": 6749,
+        "rf_annual": 0.015,
+        "min_diversification": 3,
+        "transaction_fee_bps": 10.0
+    },
+    "strategy_performance": {
+        "cagr_net": 0.05559770576668721,
+        "cagr_gross": 0.05719474269697211,
+        "annualized_volatility": 0.23456089103284136,
+        "sharpe_ratio": 0.28460423203192126,
+        "sortino_ratio": 0.4082837050666095,
+        "calmar_ratio": 0.10471685516046651,
+        "max_drawdown": 0.5309336847586774,
+        "cumulative_multiple_net": 4.259211333299852,
+        "cumulative_multiple_gross": 4.435197209420286,
+        "mean_daily_turnover": 0.00599642354990153,
+        "annualized_turnover": 1.5110987345751856,
+        "total_transaction_friction_cost": 0.040469862538284884
+    },
+    "benchmark_spy_full_horizon": {
+        "observations": 6749,
+        "start_date": "2000-01-03",
+        "end_date": "2026-11-02",
+        "strategy_cagr": 0.05559770576668721,
+        "benchmark_cagr": 0.08209418890007969,
+        "strategy_volatility": 0.23456089103284136,
+        "benchmark_volatility": 0.1922305819957115,
+        "strategy_sharpe": 0.28460423203192126,
+        "benchmark_sharpe": 0.4291787889380798,
+        "strategy_mdd": 0.5309336847586774,
+        "benchmark_mdd": 0.5518941925053293,
+        "beta": 0.8614565814875489,
+        "alpha_annual": -0.004314255597117303,
+        "tracking_error": 0.16824176970817328
+    },
+    "benchmark_rsp_isolated": {
+        "observations": 5914,
+        "start_date": "2003-05-02",
+        "end_date": "2026-11-02",
+        "strategy_cagr": 0.06322701468057312,
+        "benchmark_cagr": 0.11316528381667235,
+        "strategy_volatility": 0.24667920523300493,
+        "benchmark_volatility": 0.19679680334848088,
+        "strategy_sharpe": 0.311657847119652,
+        "benchmark_sharpe": 0.567821251165893,
+        "strategy_mdd": 0.5309336847586776,
+        "benchmark_mdd": 0.5992284143446164,
+        "beta": 0.997380189274697,
+        "alpha_annual": -0.034573145254646304,
+        "tracking_error": 0.1494141013761705
+    }
+}
