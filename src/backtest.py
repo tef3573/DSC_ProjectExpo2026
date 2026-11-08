@@ -4,11 +4,10 @@ Vectorized Portfolio Backtesting Engine with Institutional Friction and Artifact
 - Sub-issues #104, #106, #107, #108, #110: Core simulation and friction mechanics.
 - Sub-issue #127: Export comprehensive daily time series to data/backtest_results.csv.
 - Sub-issue #129: Format console scorecard table for clean terminal output.
-- Sub-issue #129: Format console scorecard table for clean terminal output.
 - Sub-issue #135: Clean code refactor and pylint compliance.
 """
 from pathlib import Path
-from typing import Tuple, Dict, Any, Optional
+from typing import Tuple, Dict, Any
 import logging
 import numpy as np
 import pandas as pd
@@ -25,6 +24,11 @@ DATA_DIR = BASE_DIR / "data"
 PRICES_PATH = DATA_DIR / "prices_daily.csv"
 MASK_PATH = DATA_DIR / "universe_mask.csv"
 DEFAULT_EXPORT_PATH = DATA_DIR / "backtest_results.csv"
+
+
+def compute_returns(prices: pd.DataFrame) -> pd.DataFrame:
+    """Computes arithmetic daily percentage returns without deprecation warnings."""
+    return prices.pct_change(fill_method=None).fillna(0.0)
 
 
 def compute_equal_weights(
