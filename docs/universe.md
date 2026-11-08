@@ -9,11 +9,11 @@ The universe masking engine (`src/universe.py`) translates the audited executive
 
 For each trading session $t \in \mathcal{T}_{\text{SPY}}$ and constituent asset $i \in \mathcal{U}$:
 
-$$I_{t, i} = \mathbf{1}_{\{t \ge \text{start\_date}_i \;\land\; t \le \text{end\_date}_i \;\land\; P_{t, i} \neq \text{NaN}\}}$$
+$$I_{t, i} = \mathbf{1}_{\{t \ge t_{\text{start}, i} \;\land\; t \le t_{\text{end}, i} \;\land\; P_{t, i} \neq \text{NaN}\}}$$
 
 Where:
-* $\text{start\_date}_i$: Effective appointment date of the Black CEO.
-* $\text{end\_date}_i$: Official departure / resignation date.
+* $t_{\text{start}, i}$: Effective appointment date of the Black CEO.
+* $t_{\text{end}, i}$: Official departure / resignation date.
 * $P_{t, i}$: Daily adjusted closing price from `prices_daily.csv`.
 * $\mathcal{T}_{\text{SPY}}$: Official NYSE trading calendar anchored by the S&P 500 benchmark (`SPY`).
 
