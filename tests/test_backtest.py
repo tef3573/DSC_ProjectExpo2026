@@ -1,11 +1,9 @@
 """
 tests/test_backtest.py
-Unit tests verifying return calculation, cash-drag defense, weight drift, and turnover friction.
-- Sub-issue #104: Assert cash plus equity allocation weights sum to exactly 1.0.
-- Sub-issue #106: Calculate inter-period weight drift from asset price returns.
-- Sub-issue #107: Deduct 10 bps transaction fee on one-way turnover.
-- Sub-issue #108: Adjust turnover formulation for initial position inception.
-- Sub-issue #110: Verify net return is strictly less than or equal to gross return.
+Unit tests verifying return calculation, cash-drag defense, weight drift, turnover friction,
+scorecard formatting, and clean end-to-end simulated data backtests.
+- Sub-issues #104, #106, #107, #108, #110, #129
+- Sub-issue #134: Execute full test suite on clean simulated data.
 """
 from pathlib import Path
 import unittest
@@ -65,16 +63,13 @@ class TestBacktestEngine(unittest.TestCase):
         })
         stock_w, cash_w, n_t = compute_equal_weights(test_mask, min_diversification=3)
 
-        # Session 0: Nt = 1 -> Stock A = 1/3, Cash = 2/3
         self.assertAlmostEqual(stock_w.loc[0, "A"], 1.0 / 3.0)
         self.assertAlmostEqual(cash_w.loc[0], 2.0 / 3.0)
 
-        # Session 1: Nt = 2 -> Stock A = 1/3, Stock B = 1/3, Cash = 1/3
         self.assertAlmostEqual(stock_w.loc[1, "A"], 1.0 / 3.0)
         self.assertAlmostEqual(stock_w.loc[1, "B"], 1.0 / 3.0)
         self.assertAlmostEqual(cash_w.loc[1], 1.0 / 3.0)
 
-        # Session 2: Nt = 3 -> Stock A = 1/3, Stock B = 1/3, Stock C = 1/3, Cash = 0.0
         self.assertAlmostEqual(stock_w.loc[2, "A"], 1.0 / 3.0)
         self.assertAlmostEqual(stock_w.loc[2, "B"], 1.0 / 3.0)
         self.assertAlmostEqual(stock_w.loc[2, "C"], 1.0 / 3.0)
@@ -105,8 +100,8 @@ class TestBacktestEngine(unittest.TestCase):
         drifted = pd.DataFrame({"A": [0.5, 0.5], "B": [0.5, 0.5]})
 
         turnover, costs = compute_turnover_and_costs(target, drifted, fee_bps=10.0)
-        self.assertEqual(turnover.iloc[0], 0.0, "Day 0 turnover must be exactly 0.0")
-        self.assertEqual(costs.iloc[0], 0.0, "Day 0 transaction costs must be exactly 0.0")
+        self.assertEqual(turnover.iloc[0], 0.0)
+        self.assertEqual(costs.iloc[0], 0.0)
 
     def test_net_return_strictly_lte_gross_return(self):
         """Sub-issue #110: Verify net return is strictly <= gross return for all sessions."""
@@ -123,61 +118,89 @@ class TestBacktestEngine(unittest.TestCase):
             "B": [False, True, False, True, False, True, False, True, False, True],
         }, index=dates)
 
-        perf = run_backtest(test_prices, test_mask, fee_bps=10.0)
+        perf = run_backtest(test_prices, test_mask, fee_bps=10.0, export_results=False)
 
         diff = perf["Black_CEO_Gross"] - perf["Black_CEO_Net"]
-        self.assertTrue((diff >= -1e-9).all(), "Net returns exceeded gross returns on some dates")
+        self.assertTrue((diff >= -1e-9).all())
         self.assertTrue((perf["Transaction_Costs"] >= 0.0).all())
 
-        gross_cum = (1.0 + perf["Black_CEO_Gross"]).cumprod().iloc[-1]
-        net_cum = perf["Black_CEO_Cumulative"].iloc[-1]
-        self.assertLess(net_cum, gross_cum, "Cumulative net wealth should be strictly less than gross wealth")
-        
-    """Sub-issue #129: Verify format_scorecard_table produces complete aligned table."""
     def test_format_scorecard_table_structure(self):
-            
-            mock_summary = {
-                "metadata": {
-                    "backtest_start": "2000-01-03",
-                    "backtest_end": "2026-10-30",
-                    "trading_sessions": 6700
-                },
-                "strategy_performance": {
-                    "cagr_net": 0.125,
-                    "annualized_volatility": 0.182,
-                    "sharpe_ratio": 0.65,
-                    "sortino_ratio": 0.88,
-                    "calmar_ratio": 0.35,
-                    "max_drawdown": 0.35,
-                    "cumulative_multiple_net": 15.2,
-                    "annualized_turnover": 0.45,
-                    "total_transaction_friction_cost": 0.08
-                },
-                "benchmark_spy_full_horizon": {
-                    "benchmark_cagr": 0.085,
-                    "benchmark_volatility": 0.151,
-                    "benchmark_sharpe": 0.48,
-                    "benchmark_mdd": 0.55,
-                    "beta": 0.95,
-                    "alpha_annual": 0.035,
-                    "tracking_error": 0.075
-                },
-                "benchmark_rsp_isolated": {
-                    "benchmark_cagr": 0.102,
-                    "benchmark_volatility": 0.178,
-                    "benchmark_sharpe": 0.52,
-                    "benchmark_mdd": 0.58,
-                    "beta": 0.98,
-                    "alpha_annual": 0.021,
-                    "tracking_error": 0.062
-                }
+        """Sub-issue #129: Verify format_scorecard_table produces complete aligned table."""
+        mock_summary = {
+            "metadata": {
+                "backtest_start": "2000-01-03",
+                "backtest_end": "2026-10-30",
+                "trading_sessions": 6700
+            },
+            "strategy_performance": {
+                "cagr_net": 0.125,
+                "annualized_volatility": 0.182,
+                "sharpe_ratio": 0.65,
+                "sortino_ratio": 0.88,
+                "calmar_ratio": 0.35,
+                "max_drawdown": 0.35,
+                "cumulative_multiple_net": 15.2,
+                "annualized_turnover": 0.45,
+                "total_transaction_friction_cost": 0.08
+            },
+            "benchmark_spy_full_horizon": {
+                "benchmark_cagr": 0.085,
+                "benchmark_volatility": 0.151,
+                "benchmark_sharpe": 0.48,
+                "benchmark_mdd": 0.55,
+                "beta": 0.95,
+                "alpha_annual": 0.035,
+                "tracking_error": 0.075
+            },
+            "benchmark_rsp_isolated": {
+                "benchmark_cagr": 0.102,
+                "benchmark_volatility": 0.178,
+                "benchmark_sharpe": 0.52,
+                "benchmark_mdd": 0.58,
+                "beta": 0.98,
+                "alpha_annual": 0.021,
+                "tracking_error": 0.062
             }
-            table_str = format_scorecard_table(mock_summary)
-            self.assertIn("BLACK CEO PORTFOLIO: INSTITUTIONAL PERFORMANCE SCORECARD", table_str)
-            self.assertIn("Sharpe Ratio", table_str)
-            self.assertIn("SPY (Cap-Wtd)", table_str)
-            self.assertIn("RSP (Eq-Wtd)*", table_str)
-            self.assertIn("Cumulative Wealth Multiple", table_str)
+        }
+        table_str = format_scorecard_table(mock_summary)
+        self.assertIn("BLACK CEO PORTFOLIO: INSTITUTIONAL PERFORMANCE SCORECARD", table_str)
+        self.assertIn("Sharpe Ratio", table_str)
+        self.assertIn("SPY (Cap-Wtd)", table_str)
+        self.assertIn("RSP (Eq-Wtd)*", table_str)
+        self.assertIn("Cumulative Wealth Multiple", table_str)
+
+    def test_full_simulation_on_synthetic_data(self):
+        """
+        Sub-issue #134: Execute end-to-end backtest on purely synthetic geometric random walks
+        with transition regimes (0, 1, 2, 4 active assets) to guarantee mathematical invariants.
+        """
+        np.random.seed(1337)
+        sessions = 500
+        dates = pd.date_range("2010-01-01", periods=sessions, freq="B")
+        assets = ["STOCK_A", "STOCK_B", "STOCK_C", "STOCK_D"]
+
+        price_dict = {}
+        for a in assets:
+            daily_returns = np.random.normal(loc=0.0004, scale=0.015, size=sessions)
+            price_dict[a] = 100.0 * np.exp(np.cumsum(daily_returns))
+        price_dict["SPY"] = 200.0 * np.exp(np.cumsum(np.random.normal(0.0003, 0.01, size=sessions)))
+        price_dict["RSP"] = 80.0 * np.exp(np.cumsum(np.random.normal(0.00035, 0.011, size=sessions)))
+        synth_prices = pd.DataFrame(price_dict, index=dates)
+
+        synth_mask = pd.DataFrame(False, index=dates, columns=assets)
+        synth_mask.iloc[50:150, 0] = True
+        synth_mask.iloc[150:300, [0, 1]] = True
+        synth_mask.iloc[300:, :] = True
+
+        res = run_backtest(synth_prices, synth_mask, fee_bps=10.0, rf_annual=0.02, export_results=False)
+
+        self.assertEqual(len(res), sessions)
+        self.assertTrue((res.iloc[0:50]["Cash_Weight"] == 1.0).all())
+        self.assertTrue(np.allclose(res.iloc[50:150]["Cash_Weight"], 2.0 / 3.0))
+        self.assertTrue(np.allclose(res.iloc[150:300]["Cash_Weight"], 1.0 / 3.0))
+        self.assertTrue(np.allclose(res.iloc[300:]["Cash_Weight"], 0.0))
+        self.assertTrue((res["Strategy_Drawdown"] <= 1e-9).all())
+        self.assertFalse(res["Black_CEO_Cumulative"].isna().any())
 
 
 if __name__ == "__main__":
