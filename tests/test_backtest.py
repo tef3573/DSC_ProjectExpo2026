@@ -16,6 +16,7 @@ from src.backtest import (
     compute_returns,
     compute_weight_drift,
     compute_turnover_and_costs,
+    format_scorecard_table,
     run_backtest
 )
 
@@ -131,6 +132,52 @@ class TestBacktestEngine(unittest.TestCase):
         gross_cum = (1.0 + perf["Black_CEO_Gross"]).cumprod().iloc[-1]
         net_cum = perf["Black_CEO_Cumulative"].iloc[-1]
         self.assertLess(net_cum, gross_cum, "Cumulative net wealth should be strictly less than gross wealth")
+        
+    """Sub-issue #129: Verify format_scorecard_table produces complete aligned table."""
+    def test_format_scorecard_table_structure(self):
+            
+            mock_summary = {
+                "metadata": {
+                    "backtest_start": "2000-01-03",
+                    "backtest_end": "2026-10-30",
+                    "trading_sessions": 6700
+                },
+                "strategy_performance": {
+                    "cagr_net": 0.125,
+                    "annualized_volatility": 0.182,
+                    "sharpe_ratio": 0.65,
+                    "sortino_ratio": 0.88,
+                    "calmar_ratio": 0.35,
+                    "max_drawdown": 0.35,
+                    "cumulative_multiple_net": 15.2,
+                    "annualized_turnover": 0.45,
+                    "total_transaction_friction_cost": 0.08
+                },
+                "benchmark_spy_full_horizon": {
+                    "benchmark_cagr": 0.085,
+                    "benchmark_volatility": 0.151,
+                    "benchmark_sharpe": 0.48,
+                    "benchmark_mdd": 0.55,
+                    "beta": 0.95,
+                    "alpha_annual": 0.035,
+                    "tracking_error": 0.075
+                },
+                "benchmark_rsp_isolated": {
+                    "benchmark_cagr": 0.102,
+                    "benchmark_volatility": 0.178,
+                    "benchmark_sharpe": 0.52,
+                    "benchmark_mdd": 0.58,
+                    "beta": 0.98,
+                    "alpha_annual": 0.021,
+                    "tracking_error": 0.062
+                }
+            }
+            table_str = format_scorecard_table(mock_summary)
+            self.assertIn("BLACK CEO PORTFOLIO: INSTITUTIONAL PERFORMANCE SCORECARD", table_str)
+            self.assertIn("Sharpe Ratio", table_str)
+            self.assertIn("SPY (Cap-Wtd)", table_str)
+            self.assertIn("RSP (Eq-Wtd)*", table_str)
+            self.assertIn("Cumulative Wealth Multiple", table_str)
 
 
 if __name__ == "__main__":

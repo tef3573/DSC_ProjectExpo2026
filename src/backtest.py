@@ -3,12 +3,19 @@ src/backtest.py
 Vectorized Portfolio Backtesting Engine with Institutional Friction and Artifact Export.
 - Sub-issues #104, #106, #107, #108, #110: Core simulation and friction mechanics.
 - Sub-issue #127: Export comprehensive daily time series to data/backtest_results.csv.
+- Sub-issue #129: Format console scorecard table for clean terminal output.
 """
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Tuple, Dict, Any, Optional
 import logging
 import numpy as np
 import pandas as pd
+
+from src.metrics import (
+    build_summary_metrics_dict,
+    export_summary_metrics,
+    DEFAULT_JSON_PATH
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -90,13 +97,54 @@ def export_backtest_results(
     results_df: pd.DataFrame,
     export_path: Path = DEFAULT_EXPORT_PATH
 ) -> Path:
-    """
-    Sub-issue #127: Formats and exports complete daily backtest time series.
-    """
+    """Sub-issue #127: Formats and exports complete daily backtest time series."""
     export_path.parent.mkdir(parents=True, exist_ok=True)
     results_df.to_csv(export_path, index=True)
     logging.info(f"Sub-issue #127: Exported daily time series to {export_path}")
     return export_path
+
+
+def format_scorecard_table(summary: Dict[str, Any]) -> str:
+    """
+    Sub-issue #129: Formats summary metrics into an aligned institutional ASCII table.
+    """
+    meta = summary.get("metadata", {})
+    strat = summary.get("strategy_performance", {})
+    spy = summary.get("benchmark_spy_full_horizon", {})
+    rsp = summary.get("benchmark_rsp_isolated", {})
+
+    lines = []
+    lines.append("=" * 86)
+    lines.append(f"{'BLACK CEO PORTFOLIO: INSTITUTIONAL PERFORMANCE SCORECARD':^86}")
+    lines.append(f"{'Horizon: ' + meta.get('backtest_start', '') + ' to ' + meta.get('backtest_end', '') + ' (' + str(meta.get('trading_sessions', '')) + ' Sessions)':^86}")
+    lines.append("=" * 86)
+    lines.append(f"{'Performance Metric':<32} {'Strategy (Net)':>16} {'SPY (Cap-Wtd)':>16} {'RSP (Eq-Wtd)*':>18}")
+    lines.append("-" * 86)
+
+    # Core Return & Risk Metrics
+    lines.append(f"{'CAGR':<32} {strat.get('cagr_net', 0.0):>15.2%} {spy.get('benchmark_cagr', 0.0):>15.2%} {rsp.get('benchmark_cagr', 0.0):>17.2%}")
+    lines.append(f"{'Annualized Volatility':<32} {strat.get('annualized_volatility', 0.0):>15.2%} {spy.get('benchmark_volatility', 0.0):>15.2%} {rsp.get('benchmark_volatility', 0.0):>17.2%}")
+    lines.append(f"{'Sharpe Ratio (Rf=1.5%)':<32} {strat.get('sharpe_ratio', 0.0):>16.2f} {spy.get('benchmark_sharpe', 0.0):>16.2f} {rsp.get('benchmark_sharpe', 0.0):>18.2f}")
+    lines.append(f"{'Sortino Ratio':<32} {strat.get('sortino_ratio', 0.0):>16.2f} {'N/A':>16} {'N/A':>18}")
+    lines.append(f"{'Calmar Ratio':<32} {strat.get('calmar_ratio', 0.0):>16.2f} {'N/A':>16} {'N/A':>18}")
+    lines.append(f"{'Maximum Drawdown (MDD)':<32} {strat.get('max_drawdown', 0.0):>15.2%} {spy.get('benchmark_mdd', 0.0):>15.2%} {rsp.get('benchmark_mdd', 0.0):>17.2%}")
+    lines.append("-" * 86)
+
+    # Benchmark Attribution
+    lines.append(f"{'Beta vs Benchmark':<32} {'N/A':>16} {spy.get('beta', 1.0):>16.2f} {rsp.get('beta', 1.0):>18.2f}")
+    lines.append(f"{'Jensen Alpha (Annualized)':<32} {'N/A':>16} {spy.get('alpha_annual', 0.0):>15.2%} {rsp.get('alpha_annual', 0.0):>17.2%}")
+    lines.append(f"{'Tracking Error':<32} {'N/A':>16} {spy.get('tracking_error', 0.0):>15.2%} {rsp.get('tracking_error', 0.0):>17.2%}")
+    lines.append("-" * 86)
+
+    # Operational Friction & Cumulative Multiples
+    lines.append(f"{'Cumulative Wealth Multiple':<32} {strat.get('cumulative_multiple_net', 1.0):>15.2f}x {'N/A':>16} {'N/A':>18}")
+    lines.append(f"{'Annualized Turnover':<32} {strat.get('annualized_turnover', 0.0):>15.2%} {'N/A':>16} {'N/A':>18}")
+    lines.append(f"{'Total Incurred Friction Costs':<32} {strat.get('total_transaction_friction_cost', 0.0):>15.2%} {'N/A':>16} {'N/A':>18}")
+    lines.append("=" * 86)
+    lines.append("* Note: RSP equal-weighted comparison is isolated starting May 1, 2003.")
+    lines.append("=" * 86)
+
+    return "\n".join(lines)
 
 
 def run_backtest(
@@ -167,6 +215,8 @@ def run_backtest(
 
     if export_results:
         export_backtest_results(df_out)
+        summary = build_summary_metrics_dict(df_out, rf_annual=rf_annual)
+        export_summary_metrics(summary)
 
     return df_out
 
@@ -175,4 +225,6 @@ if __name__ == "__main__":
     from src.data_loader import load_prices, load_universe_mask
     prices_df = load_prices()
     mask_df = load_universe_mask()
-    run_backtest(prices_df, mask_df, export_results=True)
+    results = run_backtest(prices_df, mask_df, export_results=True)
+    summary_dict = build_summary_metrics_dict(results)
+    print("\n" + format_scorecard_table(summary_dict) + "\n")
