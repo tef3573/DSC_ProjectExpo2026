@@ -21,12 +21,14 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
+PRICES_PATH = DATA_DIR / "prices_daily.csv"
+MASK_PATH = DATA_DIR / "universe_mask.csv"
 DEFAULT_EXPORT_PATH = DATA_DIR / "backtest_results.csv"
 
 
 def compute_returns(prices: pd.DataFrame) -> pd.DataFrame:
     """Computes arithmetic daily percentage returns."""
-    return prices.pct_change().fillna(0.0)
+    return prices.pct_change(fill_method=None).fillna(0.0)
 
 
 def compute_equal_weights(
@@ -105,9 +107,7 @@ def export_backtest_results(
 
 
 def format_scorecard_table(summary: Dict[str, Any]) -> str:
-    """
-    Sub-issue #129: Formats summary metrics into an aligned institutional ASCII table.
-    """
+    """Sub-issue #129: Formats summary metrics into an aligned institutional ASCII table."""
     meta = summary.get("metadata", {})
     strat = summary.get("strategy_performance", {})
     spy = summary.get("benchmark_spy_full_horizon", {})
@@ -121,7 +121,6 @@ def format_scorecard_table(summary: Dict[str, Any]) -> str:
     lines.append(f"{'Performance Metric':<32} {'Strategy (Net)':>16} {'SPY (Cap-Wtd)':>16} {'RSP (Eq-Wtd)*':>18}")
     lines.append("-" * 86)
 
-    # Core Return & Risk Metrics
     lines.append(f"{'CAGR':<32} {strat.get('cagr_net', 0.0):>15.2%} {spy.get('benchmark_cagr', 0.0):>15.2%} {rsp.get('benchmark_cagr', 0.0):>17.2%}")
     lines.append(f"{'Annualized Volatility':<32} {strat.get('annualized_volatility', 0.0):>15.2%} {spy.get('benchmark_volatility', 0.0):>15.2%} {rsp.get('benchmark_volatility', 0.0):>17.2%}")
     lines.append(f"{'Sharpe Ratio (Rf=1.5%)':<32} {strat.get('sharpe_ratio', 0.0):>16.2f} {spy.get('benchmark_sharpe', 0.0):>16.2f} {rsp.get('benchmark_sharpe', 0.0):>18.2f}")
@@ -130,13 +129,11 @@ def format_scorecard_table(summary: Dict[str, Any]) -> str:
     lines.append(f"{'Maximum Drawdown (MDD)':<32} {strat.get('max_drawdown', 0.0):>15.2%} {spy.get('benchmark_mdd', 0.0):>15.2%} {rsp.get('benchmark_mdd', 0.0):>17.2%}")
     lines.append("-" * 86)
 
-    # Benchmark Attribution
     lines.append(f"{'Beta vs Benchmark':<32} {'N/A':>16} {spy.get('beta', 1.0):>16.2f} {rsp.get('beta', 1.0):>18.2f}")
     lines.append(f"{'Jensen Alpha (Annualized)':<32} {'N/A':>16} {spy.get('alpha_annual', 0.0):>15.2%} {rsp.get('alpha_annual', 0.0):>17.2%}")
     lines.append(f"{'Tracking Error':<32} {'N/A':>16} {spy.get('tracking_error', 0.0):>15.2%} {rsp.get('tracking_error', 0.0):>17.2%}")
     lines.append("-" * 86)
 
-    # Operational Friction & Cumulative Multiples
     lines.append(f"{'Cumulative Wealth Multiple':<32} {strat.get('cumulative_multiple_net', 1.0):>15.2f}x {'N/A':>16} {'N/A':>18}")
     lines.append(f"{'Annualized Turnover':<32} {strat.get('annualized_turnover', 0.0):>15.2%} {'N/A':>16} {'N/A':>18}")
     lines.append(f"{'Total Incurred Friction Costs':<32} {strat.get('total_transaction_friction_cost', 0.0):>15.2%} {'N/A':>16} {'N/A':>18}")
@@ -222,9 +219,11 @@ def run_backtest(
 
 
 if __name__ == "__main__":
-    from src.data_loader import load_prices, load_universe_mask
-    prices_df = load_prices()
-    mask_df = load_universe_mask()
-    results = run_backtest(prices_df, mask_df, export_results=True)
-    summary_dict = build_summary_metrics_dict(results)
-    print("\n" + format_scorecard_table(summary_dict) + "\n")
+    if not PRICES_PATH.exists() or not MASK_PATH.exists():
+        logging.error(f"Missing input artifacts: {PRICES_PATH} or {MASK_PATH}")
+    else:
+        prices_df = pd.read_csv(PRICES_PATH, index_col=0, parse_dates=True)
+        mask_df = pd.read_csv(MASK_PATH, index_col=0, parse_dates=True).astype(bool)
+        results = run_backtest(prices_df, mask_df, export_results=True)
+        summary_dict = build_summary_metrics_dict(results)
+        print("\n" + format_scorecard_table(summary_dict) + "\n")
