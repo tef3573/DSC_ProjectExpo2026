@@ -1,30 +1,71 @@
-# Mathematical Specification: Covariance Estimation & Matrix Conditioning
+# Convex Quality Optimization & Covariance Estimation Architecture
 
-## 1. The Small-Sample Breakdown of Empirical Covariance
-For a lookback window of $T$ trading sessions across $N$ active portfolio constituents, the empirical sample covariance matrix is:
-$$S = \frac{1}{T - 1} \sum_{t=1}^T (r_t - \bar{r})(r_t - \bar{r})^T$$
+## 1. Overview
+The `src/optimizer.py` module supplies risk models and convex quadratic optimization routines for Milestone 3 of the Black CEO Portfolio backtesting platform. Because the active constituent universe $N_t$ is sparse (historically ranging between 1 and 8 firms), standard sample covariance matrix estimation suffers from extreme estimation error, eigenvalue dispersion, and near-singular conditioning. 
 
-When the ratio $N / T \to c > 0$, the Marchenko-Pastur law dictates that sample eigenvalues spread severely away from population eigenvalues:
-* The largest sample eigenvalues are systematically biased upward (overestimating risk).
-* The smallest sample eigenvalues are systematically biased downward toward zero (underestimating risk).
-* When $N \ge T$, $S$ is rank-deficient and singular, causing downstream mean-variance or quadratic solvers (`cvxpy`) to fail or allocate infinite leverage to noise vectors.
+To ensure numerical stability and robust risk budgeting, the engine implements Ledoit-Wolf (2004) analytical shrinkage and spectral ridge regularizations.
 
-## 2. Ledoit-Wolf Optimal Linear Shrinkage
-To regularize the risk estimate without subjective tuning, `src/optimizer.py` implements the **Ledoit-Wolf (2004)** shrinkage framework:
-$$\Sigma_{\text{LW}} = (1 - \delta) S + \delta F$$
-where:
-* $S$ is the empirical sample covariance matrix.
-* $F = \mu_F \mathbf{I}$ is the well-conditioned shrinkage target (diagonal equal-variance identity target where $\mu_F = \frac{1}{N}\text{Tr}(S)$).
-* $\delta \in [0, 1]$ is the analytically optimal shrinkage intensity minimizing the expected quadratic loss:
-$$\delta^* = \frac{\sum_{i=1}^N \text{Var}(s_{ii})}{\|S - F\|_F^2}$$
+---
 
-## 3. Low-Sample Historical Conditioning & Strict PSD Enforcement
-During early tenures or sudden CEO transitions where $T < 5$, standard estimators degenerate. `src/optimizer.py` applies a two-tiered conditioning defense:
-1. **Fallback Diagonalization**: When $T < 5$, the matrix degenerates safely to pure diagonal constituent variances with $\delta = 1.0$.
-2. **Spectral Eigenvalue Flooring**: The matrix is symmetrized $\Sigma = \frac{1}{2}(\Sigma + \Sigma^T)$ and decomposed via spectral eigenvalue decomposition:
-$$\Sigma = V \Lambda V^T \quad \text{where} \quad \Lambda = \text{diag}(\lambda_1, \dots, \lambda_N)$$
-Any eigenvalue falling below $\epsilon = 10^{-6}$ is floored to $\epsilon$:
-$$\tilde{\Lambda} = \text{diag}(\max(\lambda_i, 10^{-6})) \implies \Sigma_{\text{PSD}} = V \tilde{\Lambda} V^T$$
-This guarantees that for any portfolio weight vector $w \neq 0$:
-$$w^T \Sigma_{\text{PSD}} w > 0$$
-ensuring quadratic solvers always satisfy convexity.
+## 2. Mathematical Formulation: Ledoit-Wolf Shrinkage
+
+Given an active asset return matrix $X \in \mathbb{R}^{T \times N}$ across a historical lookback window $T$ (default: 252 sessions) and $N$ active assets:
+
+### 2.1 Sample Covariance Matrix
+Let $\bar{x} \in \mathbb{R}^N$ denote the sample mean return vector:
+$$\bar{x} = \frac{1}{T} \sum_{t=1}^T x_t$$
+
+The unbiased sample covariance matrix $S \in \mathbb{R}^{N \times N}$ is:
+$$S = \frac{1}{T - 1} \sum_{t=1}^T (x_t - \bar{x})(x_t - \bar{x})^\top$$
+
+When $N$ approaches $T$ (or when single-stock returns exhibit strong collinearity), the sample covariance matrix $S$ over-disperses eigenvalues: the largest eigenvalues are biased upward and the smallest eigenvalues are biased toward zero. Inverting $S$ in a Mean-Variance or Minimum-Variance optimization produces erratic and concentrated weights.
+
+### 2.2 Shrinkage Target ($F$)
+Ledoit & Wolf (2004) introduce a structured shrinkage target $F$ defined as the constant-correlation or scaled identity matrix. For our default formulation, we target average sample variance scaled across the identity:
+$$\mu = \frac{1}{N} \text{Tr}(S)$$
+$$F = \mu I_N$$
+
+Where:
+* $I_N$ is the $N \times N$ identity matrix.
+* $\mu$ is the cross-sectional mean variance of the active universe.
+
+### 2.3 Optimal Convex Shrinkage Intensity ($\delta^*$)
+The regularized covariance matrix $\Sigma^*$ is a convex linear combination of the sample covariance matrix $S$ and the target $F$:
+$$\Sigma^* = (1 - \delta^*) S + \delta^* F, \quad \delta^* \in [0, 1]$$
+
+The optimal shrinkage intensity $\delta^*$ minimizes the expected quadratic loss under the Frobenius norm:
+$$L(\delta) = \|\Sigma^* - \Sigma_{\text{true}}\|_F^2$$
+
+Analytically, $\delta^*$ is estimated via:
+$$\delta^* = \max\left(0, \min\left(1, \frac{\kappa}{T}\right)\right)$$
+
+Where $\kappa$ measures the asymptotic variance of the sample covariance entries relative to the target distance.
+
+---
+
+## 3. Numerical Conditioning for Low-Sample Regimes (#151)
+
+During transitions where an asset has recently entered the universe or historical data spans fewer than $T_{\min} = 63$ trading days, additional conditioning guarantees strict positive definiteness:
+
+1. **Symmetric Projection:**
+   $$\Sigma_{\text{sym}} = \frac{1}{2} (\Sigma^* + (\Sigma^*)^\top)$$
+2. **Spectral Eigenvalue Clipping (Ridge Regularization):**
+   Compute the spectral decomposition:
+   $$\Sigma_{\text{sym}} = V \Lambda V^\top, \quad \Lambda = \text{diag}(\lambda_1, \dots, \lambda_N)$$
+   Floor eigenvalues by a numerical buffer $\epsilon = 10^{-4}$:
+   $$\tilde{\Lambda} = \text{diag}(\max(\lambda_i, \epsilon))$$
+   Reconstruct:
+   $$\tilde{\Sigma} = V \tilde{\Lambda} V^\top + \epsilon I_N$$
+3. **Strict Positive Definiteness Invariant:**
+   Guarantees for any non-zero allocation vector $w \neq 0$:
+   $$w^\top \tilde{\Sigma} w > 0$$
+
+---
+
+## 4. Integration with CVXPY Solvers
+
+In subsequent Day 13–16 routines, $\tilde{\Sigma}$ serves as the quadratic risk term in convex programs:
+$$\min_{w} \quad \frac{1}{2} w^\top \tilde{\Sigma} w - q^\top w$$
+$$\text{subject to} \quad \mathbf{1}^\top w = 1, \quad 0 \le w_i \le \min\left(0.35, \frac{2}{N_t}\right)$$
+
+Because $\tilde{\Sigma} \succ 0$, the Hessian is strictly positive definite, guaranteeing unique global convergence under OSQP and CLARABEL interior-point solvers.
