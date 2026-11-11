@@ -11,7 +11,7 @@ from typing import Tuple, Optional
 import logging
 import numpy as np
 import pandas as pd
-
+import cvxpy as cp
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -207,6 +207,95 @@ class CovarianceEstimator:
         shrunk_cov, delta = ledoit_wolf_shrinkage(returns)
         psd_cov = condition_covariance_matrix(shrunk_cov, epsilon=self.epsilon)
         return psd_cov, delta
+
+class ConvexPortfolioOptimizer:
+    """
+    Sub-issues #162, #163, #164: Formulates and solves the convex quadratic program (QP)
+    for portfolio variance minimization with long-only budget constraints.
+    """
+
+    def __init__(
+        self,
+        solver: str = "CLARABEL",
+        verbose: bool = False
+    ) -> None:
+        self.solver = solver
+        self.verbose = verbose
+
+    def construct_optimization_problem(
+        self,
+        cov_matrix: np.ndarray,
+        equity_budget: float = 1.0,
+        upper_bound: Optional[float] = None
+    ) -> Tuple[cp.Variable, cp.Problem]:
+        """
+        Sub-issue #162: Constructs convex optimization problem with cp.Variable.
+        Sub-issue #163: Defines quadratic variance objective w^T @ Sigma @ w.
+        Sub-issue #164: Adds long-only budget constraints (w >= 0, sum(w) == equity_budget).
+        """
+        n = cov_matrix.shape[0]
+    
+        # Sub-issue #162: Instantiate decision variable w
+        w = cp.Variable(n, name="weights")
+
+        # Sub-issue #163: Quadratic portfolio variance objective w^T * Sigma * w
+        # Ensure covariance is wrapped in cp.psd_wrap for DCP compliance
+        sigma_psd = cp.psd_wrap(cov_matrix)
+        portfolio_variance = cp.quad_form(w, sigma_psd)
+        objective = cp.Minimize(portfolio_variance)
+
+        # Sub-issue #164: Long-only and budget constraints
+        constraints = [
+            w >= 0.0,
+            cp.sum(w) == equity_budget
+        ]
+        if upper_bound is not None:
+            constraints.append(w <= upper_bound)
+        problem = cp.Problem(objective, constraints)
+        return w, problem
+
+    def solve(
+        self,
+        cov_matrix: np.ndarray,
+        equity_budget: float = 1.0,
+        upper_bound: Optional[float] = None
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Solves the formulated quadratic program and extracts optimal weights.
+        """
+        n = cov_matrix.shape[0]
+        if n == 0 or equity_budget <= 0.0:
+            return np.zeros(n), 0.0
+
+        w, problem = self.construct_optimization_problem(
+            cov_matrix=cov_matrix,
+            equity_budget=equity_budget,
+            upper_bound=upper_bound
+        )
+        try:
+            problem.solve(solver=self.solver, verbose=self.verbose)
+            if problem.status in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE] and w.value is not None:
+                weights = np.clip(w.value, 0.0, 1.0)
+                # Re-normalize to exact budget to eliminate solver precision residuals
+                if np.sum(weights) > 0:
+                    weights = weights / np.sum(weights) * equity_budget
+                return weights, float(problem.value)
+        except Exception as e:
+            logging.warning(f"Solver {self.solver} failed: {e}. Falling back to OSQP.")
+            try:
+                problem.solve(solver="OSQP", verbose=self.verbose)
+                if problem.status in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE] and w.value is not None:
+                    weights = np.clip(w.value, 0.0, 1.0)
+                    if np.sum(weights) > 0:
+                        weights = weights / np.sum(weights) * equity_budget
+                    return weights, float(problem.value)
+            except Exception as e_osqp:
+                logging.error(f"Fallback solver OSQP also failed: {e_osqp}.")
+
+        # Graceful fallback: equal weighting if optimization fails
+        fallback_w = np.full(n, equity_budget / n)
+        fallback_var = float(fallback_w.T @ cov_matrix @ fallback_w)
+        return fallback_w, fallback_var
 
 
 if __name__ == "__main__":

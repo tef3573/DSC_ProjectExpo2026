@@ -7,17 +7,18 @@ semi-definiteness invariants for asset return covariance matrices.
 import unittest
 import numpy as np
 import pandas as pd
+import cvxpy as cp
 from src.optimizer import (
     CovarianceEstimator,
     compute_equal_weights,
     ledoit_wolf_shrinkage,
     condition_covariance_matrix,
     compute_inverse_volatility_weights,
+    ConvexPortfolioOptimizer,
     REGULARIZATION_EPSILON,
 )
 
 class TestCovarianceEstimation(unittest.TestCase):
-
     def setUp(self):
         self.estimator = CovarianceEstimator(lookback_window=100, min_observations=20)
 
@@ -152,6 +153,54 @@ class TestInverseVolatilityWeighting(unittest.TestCase):
         mask = np.ones((80, 4), dtype=bool)
         w = compute_inverse_volatility_weights(r_df, mask, concentration_defense=True)
         self.assertAlmostEqual(np.sum(w[-1]), 1.0, places=6)
+
+class TestConvexQPOptimizer(unittest.TestCase):
+    """Sub-issues #162, #163, #164, #166: Test CVXPY QP formulation and solver convergence."""
+
+    def setUp(self):
+        self.optimizer = ConvexPortfolioOptimizer()
+
+    def test_cp_variable_construction(self):
+        """Sub-issue #162: Verify construct_optimization_problem initializes cp.Variable."""
+        cov = np.eye(3) * 0.04
+        w, problem = self.optimizer.construct_optimization_problem(cov)
+        self.assertIsInstance(w, cp.Variable)
+        self.assertEqual(w.shape, (3,))
+        self.assertIsInstance(problem, cp.Problem)
+        self.assertTrue(problem.is_dcp())
+
+    def test_objective_is_quadratic_variance(self):
+        """Sub-issue #163: Verify objective is convex minimization of variance."""
+        cov = np.eye(4) * 0.05
+        _, problem = self.optimizer.construct_optimization_problem(cov)
+        self.assertIsInstance(problem.objective, cp.Minimize)
+        self.assertTrue(problem.objective.is_dcp())
+
+    def test_budget_and_long_only_constraints(self):
+        """Sub-issue #164: Verify w >= 0 and sum(w) == equity_budget."""
+        cov = np.eye(3) * 0.04
+        w, problem = self.optimizer.construct_optimization_problem(cov, equity_budget=1.0 / 3.0)
+
+        # 2 constraints: w >= 0, sum(w) == 1/3
+        self.assertEqual(len(problem.constraints), 2)
+        weights, _ = self.optimizer.solve(cov, equity_budget=1.0 / 3.0)
+
+        self.assertTrue(np.all(weights >= -1e-7))
+        self.assertAlmostEqual(np.sum(weights), 1.0 / 3.0, places=6)
+
+    def test_solver_convergence_on_standard_covariance(self):
+        """Sub-issue #166: Verify solver convergence on standard asset covariance input."""
+        cov = np.array([
+            [0.04, 0.01],
+            [0.01, 0.09]
+        ])
+        weights, variance = self.optimizer.solve(cov, equity_budget=1.0)
+
+        # Asset 0 (lower variance) must receive higher allocation than Asset 1
+        self.assertGreater(weights[0], weights[1])
+        self.assertAlmostEqual(np.sum(weights), 1.0, places=6)
+        self.assertGreater(variance, 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()
