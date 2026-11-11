@@ -12,9 +12,9 @@ from src.optimizer import (
     compute_equal_weights,
     ledoit_wolf_shrinkage,
     condition_covariance_matrix,
+    compute_inverse_volatility_weights,
     REGULARIZATION_EPSILON,
 )
-
 
 class TestCovarianceEstimation(unittest.TestCase):
 
@@ -125,6 +125,33 @@ class TestEqualWeighting(unittest.TestCase):
         self.assertAlmostEqual(np.sum(weights_2d[1]), 1.0 / 3.0, places=7)
         self.assertAlmostEqual(np.sum(weights_2d[2]), 1.0 / 3.0, places=7)
         self.assertAlmostEqual(np.sum(weights_2d[3]), 1.0, places=7)
+
+class TestInverseVolatilityWeighting(unittest.TestCase):
+    """Sub-issues #156, #157, #159: Test inverse-volatility allocation."""
+    def test_lower_volatility_receives_higher_weight(self):
+        np.random.seed(42)
+        r0 = np.random.normal(0, 0.01, size=(100, 1))
+        r1 = np.random.normal(0, 0.05, size=(100, 1))
+        r_df = pd.DataFrame(np.hstack([r0, r1]), columns=["LOW_VOL", "HIGH_VOL"])
+        mask = np.ones((100, 2), dtype=bool)
+        w = compute_inverse_volatility_weights(r_df, mask, lookback_window=63, concentration_defense=False)
+        self.assertGreater(w[-1, 0], w[-1, 1])
+        self.assertAlmostEqual(np.sum(w[-1]), 1.0, places=6)
+
+    def test_epsilon_floor_guards_zero_volatility(self):
+        r_df = pd.DataFrame(np.zeros((50, 3)), columns=["A", "B", "C"])
+        mask = np.ones((50, 3), dtype=bool)
+        w = compute_inverse_volatility_weights(r_df, mask, epsilon=1e-4, concentration_defense=False)
+        self.assertEqual(w.shape, (50, 3))
+        self.assertFalse(np.isnan(w).any())
+        self.assertAlmostEqual(np.sum(w[-1]), 1.0, places=6)
+
+    def test_weights_sum_to_unity_when_nt_gte_3(self):
+        np.random.seed(42)
+        r_df = pd.DataFrame(np.random.normal(0, 0.02, size=(80, 4)), columns=["A", "B", "C", "D"])
+        mask = np.ones((80, 4), dtype=bool)
+        w = compute_inverse_volatility_weights(r_df, mask, concentration_defense=True)
+        self.assertAlmostEqual(np.sum(w[-1]), 1.0, places=6)
 
 if __name__ == "__main__":
     unittest.main()

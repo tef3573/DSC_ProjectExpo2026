@@ -114,26 +114,20 @@ def compute_equal_weights(
     if active_mask.ndim == 1:
         n_active = int(np.sum(active_mask))
         weights = np.zeros_like(active_mask, dtype=np.float64)
-        
         if n_active == 0:
-            return weights
-            
+            return weights 
         if concentration_defense and n_active < 3:
             equity_budget = 1.0 / 3.0
         else:
             equity_budget = 1.0
-            
         weights[active_mask] = equity_budget / n_active
         return weights
-
     # Handle 2D matrix (T sessions x N assets)
     elif active_mask.ndim == 2:
         n_active = np.sum(active_mask, axis=1, keepdims=True)  # Shape (T, 1)
         weights = np.zeros_like(active_mask, dtype=np.float64)
-        
         # Avoid division by zero
         safe_n = np.where(n_active > 0, n_active, 1.0)
-        
         if concentration_defense:
             equity_budget = np.where(
                 n_active == 0,
@@ -142,12 +136,54 @@ def compute_equal_weights(
             )
         else:
             equity_budget = np.where(n_active > 0, 1.0, 0.0)
-            
         weights = np.where(active_mask, equity_budget / safe_n, 0.0)
         return weights
-
     else:
         raise ValueError(f"active_mask must be 1D or 2D, got shape {active_mask.shape}")
+
+
+def compute_inverse_volatility_weights(
+    returns: pd.DataFrame,
+    active_mask: np.ndarray,
+    lookback_window: int = 63,
+    epsilon: float = REGULARIZATION_EPSILON,
+    concentration_defense: bool = True
+) -> np.ndarray:
+    """
+    Sub-issues #156 & #157: Computes inverse-volatility risk parity allocation.
+    """
+    ret_values = returns.values
+    t, n = ret_values.shape
+    weights = np.zeros((t, n), dtype=np.float64)
+    for idx in range(t):
+        current_mask = active_mask[idx]
+        n_active = int(np.sum(current_mask))
+        if n_active == 0:
+            continue  
+        start_idx = max(0, idx - lookback_window + 1)
+        window_returns = ret_values[start_idx:idx + 1]
+        # Realized daily volatility per asset
+        if len(window_returns) > 1:
+            vol = np.nanstd(window_returns, axis=0, ddof=1)
+        else:
+            vol = np.zeros(n)
+        # Sub-issue #157: Apply epsilon floor to prevent division by zero or NaN
+        safe_vol = np.where(np.isnan(vol) | (vol < epsilon), epsilon, vol)
+        # Compute raw inverse-volatility for active constituents
+        inv_vol = np.zeros(n, dtype=np.float64)
+        inv_vol[current_mask] = 1.0 / safe_vol[current_mask]
+        sum_inv_vol = np.sum(inv_vol)
+        if sum_inv_vol > 0:
+            norm_weights = inv_vol / sum_inv_vol
+        else:
+            norm_weights = np.where(current_mask, 1.0 / n_active, 0.0)
+        # Apply concentration defense budget
+        if concentration_defense and n_active < 3:
+            equity_budget = 1.0 / 3.0
+        else:
+            equity_budget = 1.0
+        weights[idx] = norm_weights * equity_budget
+    return weights
 
 class CovarianceEstimator:
     """
@@ -171,15 +207,6 @@ class CovarianceEstimator:
         shrunk_cov, delta = ledoit_wolf_shrinkage(returns)
         psd_cov = condition_covariance_matrix(shrunk_cov, epsilon=self.epsilon)
         return psd_cov, delta
-
-
-
-
-
-
-
-
-
 
 
 if __name__ == "__main__":
