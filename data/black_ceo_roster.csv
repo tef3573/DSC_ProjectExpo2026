@@ -1,22 +1,36 @@
 ticker,company_name,ceo_name,start_date,end_date,sector
+GEN,Gen Digital (Symantec),John W. Thompson,1999-04-14,2009-04-04,Information Technology
+FNMA,Fannie Mae,Franklin Raines,1999-01-01,2004-12-21,Financial Services
+UONE,Urban One,Alfred Liggins III,1999-05-06,2026-11-10,Communication Services
+CARV,Carver Bancorp,Deborah Wright,1999-06-01,2014-12-31,Financial Services
 AXP,American Express,Kenneth Chenault,2001-01-29,2018-02-01,Financial Services
-DRI,Darden Restaurants,Clarence Otis Jr.,2004-12-01,2014-09-17,Consumer Discretionary
+DRI,Darden Restaurants,Clarence Otis Jr.,2004-12-01,2014-10-13,Consumer Discretionary
 XRX,Xerox Corporation,Ursula Burns,2009-07-01,2016-12-31,Information Technology
 MRK,Merck & Co.,Kenneth Frazier,2011-01-01,2021-06-30,Healthcare
 MCD,McDonald's Corp,Don Thompson,2012-07-01,2015-03-01,Consumer Discretionary
 CCL,Carnival Corp,Arnold Donald,2013-07-03,2022-08-01,Consumer Discretionary
 PBPB,Potbelly Corp,Aylwin Lewis,2013-10-04,2017-08-08,Consumer Discretionary
+CARV,Carver Bancorp,Michael Pugh,2015-01-01,2023-09-30,Financial Services
 JCP,J.C. Penney,Marvin Ellison,2015-08-01,2018-06-01,Consumer Discretionary
-MTB,M&T Bank Corp,René Jones,2017-12-20,2026-10-27,Financial Services
-LOW,Lowe's Companies,Marvin Ellison,2018-07-02,2026-10-27,Consumer Discretionary
-COMP,Compass Inc,Robert Reffkin,2021-04-01,2026-10-27,Real Estate
+AXSM,Axsome Therapeutics,Herriot Tabuteau,2015-11-19,2026-11-10,Healthcare
+ETN,Eaton Corporation plc,Craig Arnold,2016-06-01,2025-05-31,Industrials
+MTB,M&T Bank Corp,René Jones,2017-12-20,2026-11-10,Financial Services
+LOW,Lowe's Companies,Marvin Ellison,2018-07-02,2026-11-10,Consumer Discretionary
+RLJ,RLJ Lodging Trust,Leslie D. Hale,2018-08-22,2026-11-10,Real Estate
+TPR,Tapestry Inc.,Jide Zeitlin,2019-09-04,2020-07-21,Consumer Discretionary
 WBA,Walgreens Boots Alliance,Rosalind Brewer,2021-03-15,2023-08-31,Consumer Staples
-QRTEA,Qurate Retail Group,David Rawlinson II,2021-10-01,2026-10-27,Consumer Discretionary
-IFF,Intl Flavors & Fragrances,Frank Clyburn,2022-02-14,2024-02-01,Materials
-EXC,Exelon Corporation,Calvin Butler,2022-12-30,2026-10-27,Utilities
-SO,Southern Company,Christopher Womack,2023-05-24,2026-10-27,Utilities
-CHRW,C.H. Robinson Worldwide,David Bozeman,2023-06-26,2026-10-27,Industrials
-SAIC,Science Applications Intl,Toni Townes-Whitley,2023-10-02,2026-10-27,Industrials
-KSS,Kohl's Corp,Michael Bender,2025-11-01,2026-10-27,Consumer Discretionary
-DTE,DTE Energy,Joi Harris,2025-11-15,2026-10-27,Utilities
-HSIC,Henry Schein,Frederick Lowery,2025-12-01,2026-10-27,Healthcare
+COMP,Compass Inc,Robert Reffkin,2021-04-01,2026-11-10,Real Estate
+BYFC,Broadway Financial Corp,Brian Argrett,2021-04-01,2026-11-10,Financial Services
+QRTEA,Qurate Retail Group,David Rawlinson II,2021-10-01,2026-08-06,Consumer Discretionary
+ALNY,Alnylam Pharmaceuticals,Dr. Yvonne L. Greenstreet,2022-01-01,2026-11-10,Healthcare
+IFF,International Flavors & Fragrances Inc.,Frank Clyburn,2022-02-14,2024-02-06,Materials
+EXC,Exelon Corporation,Calvin Butler,2022-12-30,2026-11-10,Utilities
+SO,Southern Company,Christopher Womack,2023-05-24,2026-11-10,Utilities
+CHRW,C.H. Robinson Worldwide,David Bozeman,2023-06-26,2026-11-10,Industrials
+SAIC,Science Applications Intl,Toni Townes-Whitley,2023-10-02,2025-10-23,Industrials
+CARV,Carver Bancorp,Craig MacKay,2023-10-01,2024-10-31,Financial Services
+CARV,Carver Bancorp,Donald Felix,2024-11-01,2026-11-10,Financial Services
+KSS,Kohl's Corp,Michael Bender,2025-05-01,2026-11-10,Consumer Discretionary
+DTE,DTE Energy,Joi Harris,2025-09-08,2026-11-10,Utilities
+FNMA,Fannie Mae,Peter Akwaboah,2025-10-22,2026-11-10,Financial Services
+HSIC,Henry Schein,Frederick Lowery,2026-03-02,2026-11-10,Healthcare

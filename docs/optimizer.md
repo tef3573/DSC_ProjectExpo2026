@@ -29,17 +29,21 @@ Where:
 * $I_N$ is the $N \times N$ identity matrix.
 * $\mu$ is the cross-sectional mean variance of the active universe.
 
-### 2.3 Optimal Convex Shrinkage Intensity ($\delta^*$)
-The regularized covariance matrix $\Sigma^*$ is a convex linear combination of the sample covariance matrix $S$ and the target $F$:
-$$\Sigma^* = (1 - \delta^*) S + \delta^* F, \quad \delta^* \in [0, 1]$$
 
-The optimal shrinkage intensity $\delta^*$ minimizes the expected quadratic loss under the Frobenius norm:
-$$L(\delta) = \|\Sigma^* - \Sigma_{\text{true}}\|_F^2$$
+### 2.3 Optimal Convex Shrinkage Intensity ($\delta^{\ast}$)
+The regularized covariance matrix $\Sigma^{\ast}$ is a convex linear combination of the sample covariance matrix $S$ and the structured target $F$:
 
-Analytically, $\delta^*$ is estimated via:
-$$\delta^* = \max\left(0, \min\left(1, \frac{\kappa}{T}\right)\right)$$
+$$\Sigma^{\ast} = (1 - \delta^{\ast}) S + \delta^{\ast} F, \quad \delta^{\ast} \in [0, 1]$$
 
-Where $\kappa$ measures the asymptotic variance of the sample covariance entries relative to the target distance.
+The optimal shrinkage intensity $\delta^{\ast}$ minimizes the expected quadratic loss under the Frobenius norm:
+
+$$L(\delta) = \|\Sigma^{\ast} - \Sigma_{\text{true}}\|_{F}^{2}$$
+
+Analytically, $\delta^{\ast}$ is estimated via:
+
+$$\delta^{\ast} = \max\left(0, \, \min\left(1, \, \frac{\kappa}{T}\right)\right)$$
+
+where $\kappa = \frac{\pi - \rho}{\gamma}$ measures the asymptotic variance of the sample covariance entries relative to the squared distance to the shrinkage target $F$, and $T$ is the number of historical sample observations.
 
 ---
 
@@ -69,3 +73,36 @@ $$\min_{w} \quad \frac{1}{2} w^\top \tilde{\Sigma} w - q^\top w$$
 $$\text{subject to} \quad \mathbf{1}^\top w = 1, \quad 0 \le w_i \le \min\left(0.35, \frac{2}{N_t}\right)$$
 
 Because $\tilde{\Sigma} \succ 0$, the Hessian is strictly positive definite, guaranteeing unique global convergence under OSQP and CLARABEL interior-point solvers.
+
+## Heuristic Benchmark: Inverse-Volatility Risk Parity Allocation
+
+### 1. Motivation & Mathematical Formulation
+Naive equal-weighting ($w_i = 1/N_t$) assumes identical variance across all portfolio assets. In an all-cap universe containing both large-cap blue chips and small/micro-cap equities, equal-weighting allows high-variance idiosyncratic noise to dominate portfolio return and volatility.
+
+Inverse-volatility allocation budgets portfolio capital inversely to each active asset's trailing sample standard deviation. Over a rolling lookback window $L = 63$ trading sessions (approximately one business quarter):
+
+$$\sigma_{i, t} = \sqrt{\frac{1}{L - 1} \sum_{\tau=t-L+1}^{t} \left( r_{i, \tau} - \bar{r}_{i, t} \right)^2}$$
+
+### 2. Numerical Regularization ($\epsilon$ Floor)
+To prevent division-by-zero errors or numerical instability when an asset exhibits zero or near-zero variance (e.g., newly listed assets or trading halts), an analytical floor $\epsilon = 10^{-4}$ is applied:
+
+$$\tilde{\sigma}_{i, t} = \max(\sigma_{i, t}, \, \epsilon)$$
+
+The unnormalized inverse-volatility weight for active constituent $i \in \mathcal{A}_t$ is:
+
+$$w_{i, t}^{\text{raw}} = \frac{1}{\tilde{\sigma}_{i, t}}$$
+
+### 3. Budget Normalization & Concentration Defense
+Let $N_t = |\mathcal{A}_t|$ denote the number of active Black CEO constituents on date $t$. The total portfolio equity budget $B_t$ is determined by the concentration defense rule:
+
+$$B_t = \begin{cases} 
+0.0 & \text{if } N_t = 0 \\ 
+\frac{1}{3} & \text{if } 1 \le N_t < 3 \\ 
+1.0 & \text{if } N_t \ge 3 
+\end{cases}$$
+
+The final portfolio weight for asset $i$ is:
+
+$$w_{i, t} = B_t \cdot \frac{w_{i, t}^{\text{raw}}}{\sum_{j \in \mathcal{A}_t} w_{j, t}^{\text{raw}}}$$
+
+The remaining allocation $(1 - B_t)$ sits in risk-free cash, dampening drawdown risk during periods of universe sparsity.
