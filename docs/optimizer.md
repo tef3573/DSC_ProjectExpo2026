@@ -106,3 +106,41 @@ The final portfolio weight for asset $i$ is:
 $$w_{i, t} = B_t \cdot \frac{w_{i, t}^{\text{raw}}}{\sum_{j \in \mathcal{A}_t} w_{j, t}^{\text{raw}}}$$
 
 The remaining allocation $(1 - B_t)$ sits in risk-free cash, dampening drawdown risk during periods of universe sparsity.
+
+---
+
+## 4. Convex Quadratic Program (QP) Formulation & Solver Architecture
+
+### 4.1 Quadratic Program Specification (#162, #163, #164)
+The minimum-variance portfolio allocation is formulated as a convex quadratic program over the decision variable vector $w \in \mathbb{R}^N$:
+
+$$\min_{w} \quad \frac{1}{2} w^{\top} \Sigma^{*} w$$
+
+$$\text{subject to} \quad w \ge 0, \quad \sum_{i=1}^{N} w_i = B_t$$
+
+where $\Sigma^{*} \in \mathbb{S}_{+}^{N}$ is the Ledoit-Wolf shrunk, PSD-conditioned covariance matrix, and $B_t \in \{0, \frac{1}{3}, 1.0\}$ represents the active equity budget under the concentration defense rule.
+
+### 4.2 Solver Selection Rationale: CLARABEL vs. OSQP (#165)
+
+`ConvexPortfolioOptimizer` implements a dual-solver hierarchy designed for robust, zero-crash execution across historical market regimes:
+
+---
+Input: Conditioned Covariance Matrix (PSD)
+                        │
+                        ▼
+         Primary Solver: CLARABEL (IPM)
+         (Interior-Point Conic Optimization)
+                        │
+            ┌───────────┴────────────┐
+         Success                    Failure
+            │                         │
+            ▼                         ▼
+      Optimal Weights          Fallback Solver: OSQP
+                              (First-Order ADMM Splitting)
+                                     │
+                        ┌────────────┴────────────┐
+                     Success                    Failure
+                        │                         │
+                        ▼                         ▼
+                  Optimal Weights          Deterministic Fallback
+                                             (Inverse-Vol / Equal Weight)
