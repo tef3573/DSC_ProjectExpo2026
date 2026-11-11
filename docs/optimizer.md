@@ -29,21 +29,22 @@ Where:
 * $I_N$ is the $N \times N$ identity matrix.
 * $\mu$ is the cross-sectional mean variance of the active universe.
 
-### 2.3 Optimal Convex Shrinkage Intensity ($\delta^*$)
 
-The regularized covariance matrix $\Sigma^*$ is a convex linear combination of the sample covariance matrix $S$ and the structured target $F$:
+### 2.3 Optimal Convex Shrinkage Intensity ($\delta^{\ast}$)
+The regularized covariance matrix $\Sigma^{\ast}$ is a convex linear combination of the sample covariance matrix $S$ and the structured target $F$:
 
-$$\Sigma^* = (1 - \delta^*) S + \delta^* F, \quad \delta^* \in [0, 1]$$
+$$\Sigma^{\ast} = (1 - \delta^{\ast}) S + \delta^{\ast} F, \quad \delta^{\ast} \in [0, 1]$$
 
-The optimal shrinkage intensity $\delta^*$ minimizes the expected quadratic loss under the Frobenius norm:
+The optimal shrinkage intensity $\delta^{\ast}$ minimizes the expected quadratic loss under the Frobenius norm:
 
-$$L(\delta) = \|\Sigma^* - \Sigma_{\text{true}}\|_F^2$$
+$$L(\delta) = \|\Sigma^{\ast} - \Sigma_{\text{true}}\|_{F}^{2}$$
 
-Analytically, $\delta^*$ is estimated via:
+Analytically, $\delta^{\ast}$ is estimated via:
 
-$$\delta^* = \max\left(0, \min\left(1, \frac{\kappa}{T}\right)\right)$$
+$$\delta^{\ast} = \max\left(0, \, \min\left(1, \, \frac{\kappa}{T}\right)\right)$$
 
 where $\kappa = \frac{\pi - \rho}{\gamma}$ measures the asymptotic variance of the sample covariance entries relative to the squared distance to the shrinkage target $F$, and $T$ is the number of historical sample observations.
+
 ---
 
 ## 3. Numerical Conditioning for Low-Sample Regimes (#151)
