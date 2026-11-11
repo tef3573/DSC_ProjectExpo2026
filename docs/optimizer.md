@@ -30,16 +30,19 @@ Where:
 * $\mu$ is the cross-sectional mean variance of the active universe.
 
 ### 2.3 Optimal Convex Shrinkage Intensity ($\delta^*$)
-The regularized covariance matrix $\Sigma^*$ is a convex linear combination of the sample covariance matrix $S$ and the target $F$:
+The regularized covariance matrix $\Sigma^*$ is a convex linear combination of the sample covariance matrix $S$ and the structured target $F$:
+
 $$\Sigma^* = (1 - \delta^*) S + \delta^* F, \quad \delta^* \in [0, 1]$$
 
 The optimal shrinkage intensity $\delta^*$ minimizes the expected quadratic loss under the Frobenius norm:
+
 $$L(\delta) = \|\Sigma^* - \Sigma_{\text{true}}\|_F^2$$
 
 Analytically, $\delta^*$ is estimated via:
-$$\delta^* = \max\left(0, \min\left(1, \frac{\kappa}{T}\right)\right)$$
 
-Where $\kappa$ measures the asymptotic variance of the sample covariance entries relative to the target distance.
+$$\delta^* = \max\left(0, \, \min\left(1, \, \frac{\kappa}{T}\right)\right)$$
+
+where $\kappa = \frac{\pi - \rho}{\gamma}$ measures the asymptotic variance of the sample covariance entries relative to the squared distance to the shrinkage target $F$, and $T$ is the number of historical sample observations.
 
 ---
 
