@@ -4,6 +4,7 @@ Unit tests verifying Ledoit-Wolf shrinkage, eigenvalue conditioning, and strict 
 semi-definiteness invariants for asset return covariance matrices.
 - Sub-issue #153: Assert estimated covariance matrix is strictly positive semi-definite.
 """
+
 import unittest
 import numpy as np
 import pandas as pd
@@ -201,6 +202,42 @@ class TestConvexQPOptimizer(unittest.TestCase):
         self.assertAlmostEqual(np.sum(weights), 1.0, places=6)
         self.assertGreater(variance, 0.0)
 
+    def test_solver_convergence_on_standard_covariance(self):
+        """Sub-issue #166: Verify solver convergence on standard asset covariance input."""
+        # 3-asset standard covariance matrix with realistic correlation structure
+        cov = np.array([
+            [0.04, 0.01, 0.005],
+            [0.01, 0.09, 0.02],
+            [0.005, 0.02, 0.16]
+        ])
+        weights, variance = self.optimizer.solve(cov, equity_budget=1.0)
+
+        # 1. Weights must be non-negative (long-only) and sum to budget
+        self.assertTrue(np.all(weights >= -1e-7))
+        self.assertAlmostEqual(np.sum(weights), 1.0, places=6)
+
+        # 2. Lower variance assets must receive strictly higher allocations
+        # Asset 0 (vol=20%) > Asset 1 (vol=30%) > Asset 2 (vol=40%)
+        self.assertGreater(weights[0], weights[1])
+        self.assertGreater(weights[1], weights[2])
+
+        # 3. Portfolio variance must be strictly positive and lower than equal-weight variance
+        eq_w = np.full(3, 1.0 / 3.0)
+        eq_var = float(eq_w.T @ cov @ eq_w)
+        self.assertGreater(variance, 0.0)
+        self.assertLess(variance, eq_var)
+
+    def test_solver_handles_near_singular_matrix(self):
+        """Sub-issue #166: Verify convergence stability on near-collinear covariance."""
+        # Near rank-deficient covariance matrix
+        cov = np.array([
+            [0.04, 0.0399],
+            [0.0399, 0.04]
+        ])
+        weights, variance = self.optimizer.solve(cov, equity_budget=1.0)
+        self.assertFalse(np.isnan(weights).any())
+        self.assertAlmostEqual(np.sum(weights), 1.0, places=6)
+        self.assertGreaterEqual(variance, 0.0)
 
 if __name__ == "__main__":
     unittest.main()
