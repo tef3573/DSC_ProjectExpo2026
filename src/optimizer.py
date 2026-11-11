@@ -101,6 +101,53 @@ def condition_covariance_matrix(
     psd_cov = eigenvectors @ np.diag(clipped_eigenvalues) @ eigenvectors.T
     return 0.5 * (psd_cov + psd_cov.T)
 
+def compute_equal_weights(
+    active_mask: np.ndarray,
+    concentration_defense: bool = True
+) -> np.ndarray:
+    """
+    Sub-issue #155: Computes dynamic 1/Nt equal weighting across active constituents.
+    """
+    active_mask = np.asarray(active_mask, dtype=bool)
+    
+    # Handle 1D slice (single session)
+    if active_mask.ndim == 1:
+        n_active = int(np.sum(active_mask))
+        weights = np.zeros_like(active_mask, dtype=np.float64)
+        
+        if n_active == 0:
+            return weights
+            
+        if concentration_defense and n_active < 3:
+            equity_budget = 1.0 / 3.0
+        else:
+            equity_budget = 1.0
+            
+        weights[active_mask] = equity_budget / n_active
+        return weights
+
+    # Handle 2D matrix (T sessions x N assets)
+    elif active_mask.ndim == 2:
+        n_active = np.sum(active_mask, axis=1, keepdims=True)  # Shape (T, 1)
+        weights = np.zeros_like(active_mask, dtype=np.float64)
+        
+        # Avoid division by zero
+        safe_n = np.where(n_active > 0, n_active, 1.0)
+        
+        if concentration_defense:
+            equity_budget = np.where(
+                n_active == 0,
+                0.0,
+                np.where(n_active < 3, 1.0 / 3.0, 1.0)
+            )
+        else:
+            equity_budget = np.where(n_active > 0, 1.0, 0.0)
+            
+        weights = np.where(active_mask, equity_budget / safe_n, 0.0)
+        return weights
+
+    else:
+        raise ValueError(f"active_mask must be 1D or 2D, got shape {active_mask.shape}")
 
 class CovarianceEstimator:
     """
@@ -124,6 +171,15 @@ class CovarianceEstimator:
         shrunk_cov, delta = ledoit_wolf_shrinkage(returns)
         psd_cov = condition_covariance_matrix(shrunk_cov, epsilon=self.epsilon)
         return psd_cov, delta
+
+
+
+
+
+
+
+
+
 
 
 if __name__ == "__main__":
