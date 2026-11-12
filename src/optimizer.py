@@ -208,6 +208,63 @@ class CovarianceEstimator:
         psd_cov = condition_covariance_matrix(shrunk_cov, epsilon=self.epsilon)
         return psd_cov, delta
 
+    def compute_fundamental_quality_scores(
+    returns: pd.DataFrame,
+    active_mask: np.ndarray,
+    lookback_window: int = DEFAULT_LOOKBACK_DAYS,
+    skip_recent_days: int = 21,
+    epsilon: float = REGULARIZATION_EPSILON
+) -> np.ndarray:
+        """
+        Sub-issue #168: Formulates point-in-time raw fundamental quality scoring vector q_t.
+        Combines two empirical quality dimensions strictly from historical data prior to t:
+
+        1. Risk-adjusted profitability/drift proxy: 12-1 month Sharpe/Information ratio.
+        2. Stability proxy: Negative trailing 63-day downside volatility.
+        """
+        ret_values = returns.values
+        t, n = ret_values.shape
+        quality_matrix = np.zeros((t, n), dtype=np.float64)
+
+        for idx in range(t):
+            current_mask = active_mask[idx]
+            if not np.any(current_mask):
+                continue
+
+        # 1. Risk-Adjusted Drift (t - lookback to t - skip_recent_days)
+        end_drift = max(0, idx - skip_recent_days)
+        start_drift = max(0, idx - lookback_window)
+
+        if end_drift - start_drift >= 20:
+            drift_window = ret_values[start_drift:end_drift]
+            mean_ret = np.nanmean(drift_window, axis=0)
+            vol_ret = np.nanstd(drift_window, axis=0, ddof=1)
+            safe_vol = np.where(np.isnan(vol_ret) | (vol_ret < epsilon), epsilon, vol_ret)
+            raw_drift = np.nan_to_num(mean_ret / safe_vol, nan=0.0)
+        else:
+            raw_drift = np.zeros(n, dtype=np.float64)
+
+        # 2. Stability / Low Downside Volatility (t - 63 to t)
+        start_stab = max(0, idx - MIN_OBSERVATIONS_REQUIRED)
+        if idx - start_stab >= 10:
+            stab_window = ret_values[start_stab:idx]
+            downside_returns = np.minimum(np.nan_to_num(stab_window, nan=0.0), 0.0)
+            downside_vol = np.sqrt(np.mean(downside_returns ** 2, axis=0))
+            raw_stability = -downside_vol
+        else:
+            raw_stability = np.zeros(n, dtype=np.float64)
+
+        composite_raw = 0.5 * raw_drift + 0.5 * raw_stability
+        quality_matrix[idx, current_mask] = composite_raw[current_mask]
+
+        return quality_matrix
+
+
+
+
+
+
+
 class ConvexPortfolioOptimizer:
     """
     Sub-issues #162, #163, #164: Formulates and solves the convex quadratic program (QP)
