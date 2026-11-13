@@ -282,6 +282,8 @@ class ConvexPortfolioOptimizer:
     def construct_optimization_problem(
         self,
         cov_matrix: np.ndarray,
+        quality_scores: Optional[np.ndarray] = None,
+        lambda_tilt: float = 0.5,
         equity_budget: float = 1.0,
         upper_bound: Optional[float] = None
     ) -> Tuple[cp.Variable, cp.Problem]:
@@ -289,19 +291,23 @@ class ConvexPortfolioOptimizer:
         Sub-issue #162: Constructs convex optimization problem with cp.Variable.
         Sub-issue #163: Defines quadratic variance objective w^T @ Sigma @ w.
         Sub-issue #164: Adds long-only budget constraints (w >= 0, sum(w) == equity_budget).
+        Sub-issue #169: Constructs convex optimization problem with cp.Variable, quadratic variance
+        objective w^T @ Sigma @ w, linear quality tilt -lambda * q^T @ w, and long-only budget constraints.
         """
         n = cov_matrix.shape[0]
-    
-        # Sub-issue #162: Instantiate decision variable w
         w = cp.Variable(n, name="weights")
-
-        # Sub-issue #163: Quadratic portfolio variance objective w^T * Sigma * w
-        # Ensure covariance is wrapped in cp.psd_wrap for DCP compliance
         sigma_psd = cp.psd_wrap(cov_matrix)
         portfolio_variance = cp.quad_form(w, sigma_psd)
-        objective = cp.Minimize(portfolio_variance)
 
-        # Sub-issue #164: Long-only and budget constraints
+        # Sub-issue #169: Add linear quality tilt term -lambda * (q^T @ w)
+        if quality_scores is not None and lambda_tilt > 0.0:
+            q = np.asarray(quality_scores, dtype=np.float64).flatten()
+            if q.shape[0] != n:
+                raise ValueError(f"quality_scores length {q.shape[0]} must match covariance dimension {n}")
+            objective = cp.Minimize(0.5 * portfolio_variance - lambda_tilt * (q @ w))
+        else:
+            objective = cp.Minimize(0.5 * portfolio_variance)
+
         constraints = [
             w >= 0.0,
             cp.sum(w) == equity_budget
@@ -314,18 +320,22 @@ class ConvexPortfolioOptimizer:
     def solve(
         self,
         cov_matrix: np.ndarray,
+        quality_scores: Optional[np.ndarray] = None,
+        lambda_tilt: float = 0.5,
         equity_budget: float = 1.0,
         upper_bound: Optional[float] = None
     ) -> Tuple[np.ndarray, float]:
         """
-        Solves the formulated quadratic program and extracts optimal weights.
+        Solves the formulated quadratic program with optional quality tilts
+        and extracts optimal weights.
         """
         n = cov_matrix.shape[0]
         if n == 0 or equity_budget <= 0.0:
             return np.zeros(n), 0.0
-
         w, problem = self.construct_optimization_problem(
             cov_matrix=cov_matrix,
+            quality_scores=quality_scores,
+            lambda_tilt=lambda_tilt,
             equity_budget=equity_budget,
             upper_bound=upper_bound
         )
@@ -333,7 +343,6 @@ class ConvexPortfolioOptimizer:
             problem.solve(solver=self.solver, verbose=self.verbose)
             if problem.status in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE] and w.value is not None:
                 weights = np.clip(w.value, 0.0, 1.0)
-                # Re-normalize to exact budget to eliminate solver precision residuals
                 if np.sum(weights) > 0:
                     weights = weights / np.sum(weights) * equity_budget
                 return weights, float(problem.value)
@@ -348,8 +357,6 @@ class ConvexPortfolioOptimizer:
                     return weights, float(problem.value)
             except Exception as e_osqp:
                 logging.error(f"Fallback solver OSQP also failed: {e_osqp}.")
-
-        # Graceful fallback: equal weighting if optimization fails
         fallback_w = np.full(n, equity_budget / n)
         fallback_var = float(fallback_w.T @ cov_matrix @ fallback_w)
         return fallback_w, fallback_var
