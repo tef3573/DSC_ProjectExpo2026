@@ -127,7 +127,7 @@ where $\Sigma^{*} \in \mathbb{S}_{+}^{N}$ is the Ledoit-Wolf shrunk, PSD-conditi
 ---
 ```mermaid
 flowchart TD
-    A["Input: Conditioned Covariance Matrix (PSD)"] --> B["Primary Solver: CLARABEL (IPM)<br/><i>Interior-Point Conic Optimization</i>"]
+    A["    Input: Conditioned Covariance Matrix (PSD)     "] --> B[" Primary Solver: CLARABEL (IPM)<br/><i>Interior-Point Conic Optimization</i>"]
     B -->|Success| C["Optimal Weights"]
     B -->|Failure| D["Fallback Solver: OSQP<br/><i>First-Order ADMM Splitting</i>"]
     D -->|Success| C
