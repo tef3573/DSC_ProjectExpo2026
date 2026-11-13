@@ -125,28 +125,15 @@ where $\Sigma^{*} \in \mathbb{S}_{+}^{N}$ is the Ledoit-Wolf shrunk, PSD-conditi
 `ConvexPortfolioOptimizer` implements a dual-solver hierarchy designed for robust, zero-crash execution across historical market regimes:
 
 ---
-'
-Input: Conditioned Covariance Matrix (PSD)
-                        │
-                        ▼
-         Primary Solver: CLARABEL (IPM)
-         (Interior-Point Conic Optimization)
-                        │
-            ┌───────────┴────────────┐
-         Success                    Failure
-            │                         │
-            ▼                         ▼
-      Optimal Weights          Fallback Solver: OSQP
-                              (First-Order ADMM Splitting)
-                                     │
-                        ┌────────────┴────────────┐
-                     Success                    Failure
-                        │                         │
-                        ▼                         ▼
-                  Optimal Weights          Deterministic Fallback
-                                             (Inverse-Vol / Equal Weight)
-'
+```mermaid
+flowchart TD
+    A["Input: Conditioned Covariance Matrix (PSD)"] --> B["Primary Solver: CLARABEL (IPM)<br/><i>Interior-Point Conic Optimization</i>"]
+    B -->|Success| C["Optimal Weights"]
+    B -->|Failure| D["Fallback Solver: OSQP<br/><i>First-Order ADMM Splitting</i>"]
+    D -->|Success| C
+    D -->|Failure| E["Deterministic Fallback<br/><i>Inverse-Vol / Equal Weight</i>"]
 
+```
 ---
 
 ## 5. Fundamental Quality Score Formulation & Objective Tilts
