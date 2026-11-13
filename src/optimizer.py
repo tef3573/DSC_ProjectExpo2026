@@ -208,6 +208,34 @@ class CovarianceEstimator:
         psd_cov = condition_covariance_matrix(shrunk_cov, epsilon=self.epsilon)
         return psd_cov, delta
 
+    def normalize_quality_scores(
+    raw_scores: np.ndarray,
+    active_mask: np.ndarray,
+    clip_bound: float = 3.0
+) -> np.ndarray:
+        """"
+        Sub-issue #170: Cross-sectional z-score normalization of fundamental quality scores 
+        across active peers.
+        """
+        scores = np.asarray(raw_scores, dtype=np.float64).flatten()
+        mask = np.asarray(active_mask, dtype=bool).flatten()
+        n = len(scores)
+        z_scores = np.zeros(n, dtype=np.float64)
+        active_indices = np.where(mask)[0]
+
+        if len(active_indices) < 2:
+            return z_scores
+        active_vals = scores[active_indices]
+        mean_val = np.nanmean(active_vals)
+        std_val = np.nanstd(active_vals, ddof=1)
+
+        if np.isnan(std_val) or std_val < 1e-6:
+            return z_scores
+        norm_vals = (active_vals - mean_val) / std_val
+        clipped_vals = np.clip(norm_vals, -clip_bound, clip_bound)
+        z_scores[active_indices] = clipped_vals
+        return z_scores
+    
     def compute_fundamental_quality_scores(
     returns: pd.DataFrame,
     active_mask: np.ndarray,
@@ -216,11 +244,8 @@ class CovarianceEstimator:
     epsilon: float = REGULARIZATION_EPSILON
 ) -> np.ndarray:
         """
-        Sub-issue #168: Formulates point-in-time raw fundamental quality scoring vector q_t.
-        Combines two empirical quality dimensions strictly from historical data prior to t:
-
-        1. Risk-adjusted profitability/drift proxy: 12-1 month Sharpe/Information ratio.
-        2. Stability proxy: Negative trailing 63-day downside volatility.
+        Sub-issues #168 & #170: Formulates point-in-time fundamental quality scoring vector q_t, 
+        cross-sectionally z-score normalized across active peers.
         """
         ret_values = returns.values
         t, n = ret_values.shape
@@ -228,7 +253,7 @@ class CovarianceEstimator:
 
         for idx in range(t):
             current_mask = active_mask[idx]
-            if not np.any(current_mask):
+            if np.sum(current_mask) < 2:
                 continue
 
         # 1. Risk-Adjusted Drift (t - lookback to t - skip_recent_days)
@@ -253,17 +278,9 @@ class CovarianceEstimator:
             raw_stability = -downside_vol
         else:
             raw_stability = np.zeros(n, dtype=np.float64)
-
         composite_raw = 0.5 * raw_drift + 0.5 * raw_stability
         quality_matrix[idx, current_mask] = composite_raw[current_mask]
-
         return quality_matrix
-
-
-
-
-
-
 
 class ConvexPortfolioOptimizer:
     """
