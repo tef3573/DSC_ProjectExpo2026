@@ -125,6 +125,7 @@ where $\Sigma^{*} \in \mathbb{S}_{+}^{N}$ is the Ledoit-Wolf shrunk, PSD-conditi
 `ConvexPortfolioOptimizer` implements a dual-solver hierarchy designed for robust, zero-crash execution across historical market regimes:
 
 ---
+'
 Input: Conditioned Covariance Matrix (PSD)
                         │
                         ▼
@@ -144,3 +145,36 @@ Input: Conditioned Covariance Matrix (PSD)
                         ▼                         ▼
                   Optimal Weights          Deterministic Fallback
                                              (Inverse-Vol / Equal Weight)
+'
+
+---
+
+## 5. Fundamental Quality Score Formulation & Objective Tilts
+
+### 5.1 Point-in-Time Quality Proxy Vector ($q_t$) (#168)
+To avoid look-ahead and restatement bias across historical constituents (including delisted equities such as `JCP`, `WBA`, and `QRTEA`), the quality scoring vector $q_t \in \mathbb{R}^N$ is formulated strictly from point-in-time historical price action prior to trading session $t$:
+
+1. **Risk-Adjusted Drift ($12\text{–}1$ Month Information Ratio):**
+   Computed over the trailing 252-day window ending 21 trading days prior to $t$ ($[t-252, \, t-21)$) to capture persistent operational outperformance while avoiding short-term reversal contamination:
+   $$S_{\text{drift}, i, t} = \frac{\mu_{i, [t-252, t-21)}}{\max(\sigma_{i, [t-252, t-21)}, \epsilon)}$$
+
+2. **Downside Stability Factor (Low-Risk Quality Proxy):**
+   Computed as the negative trailing 63-day realized downside semi-deviation over $[t-63, \, t)$:
+   $$S_{\text{stab}, i, t} = -\sqrt{\frac{1}{63} \sum_{\tau=t-63}^{t-1} \min(r_{i, \tau}, 0)^2}$$
+
+### 5.2 Cross-Sectional Peer Z-Score Normalization (#170)
+Raw sub-factors are standardized cross-sectionally strictly across the active constituent cohort $\mathcal{A}_t = \{i : \text{mask}_{t,i} = \text{True}\}$ on date $t$:
+
+$$z_{i, t} = \text{clip}\left( \frac{S_{i, t} - \mu_{\mathcal{A}_t}}{\sigma_{\mathcal{A}_t}}, \, -3.0, \, +3.0 \right)$$
+
+* **Equal Blending & Re-Standardization:** The normalized sub-factors are combined ($0.5 \, z_{\text{drift}, i, t} + 0.5 \, z_{\text{stab}, i, t}$) and re-standardized across $\mathcal{A}_t$ so $q_t$ maintains zero cross-sectional mean and unit variance.
+* **Inactive & Sparse Universe Guards:** Inactive constituents ($i \notin \mathcal{A}_t$) strictly receive $q_{i, t} = 0.0$. When $N_t < 2$ or $\sigma_{\mathcal{A}_t} < 10^{-6}$, $q_t = \mathbf{0}$ so the optimizer reverts cleanly to pure minimum variance.
+
+### 5.3 Linear Quality Tilt Objective Function (#169)
+The convex quadratic program integrates the quality vector via a linear reward term scaled by tilt intensity $\lambda \ge 0$:
+
+$$\min_{w} \quad \frac{1}{2} w^{\top} \Sigma^{*} w - \lambda \, q_t^{\top} w$$
+
+$$\text{subject to} \quad w \ge 0, \quad \sum_{i=1}^{N} w_i = B_t$$
+
+Because $-\lambda \, q_t^{\top} w$ is affine in $w$ and $\Sigma^{*} \in \mathbb{S}_{+}^{N}$ is positive semi-definite, the composite objective remains strictly convex and Disciplined Convex Programming (DCP) compliant.
