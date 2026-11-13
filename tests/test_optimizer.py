@@ -16,6 +16,8 @@ from src.optimizer import (
     condition_covariance_matrix,
     compute_inverse_volatility_weights,
     ConvexPortfolioOptimizer,
+    normalize_quality_scores,
+    compute_fundamental_quality_scores,
     REGULARIZATION_EPSILON,
 )
 
@@ -238,6 +240,60 @@ class TestConvexQPOptimizer(unittest.TestCase):
         self.assertFalse(np.isnan(weights).any())
         self.assertAlmostEqual(np.sum(weights), 1.0, places=6)
         self.assertGreaterEqual(variance, 0.0)
+
+class TestQualityScoreTilts(unittest.TestCase):
+    """Sub-issues #168, #169, #170, #172: Test quality scoring, peer normalization, and tilts."""
+
+    def test_z_score_normalization_properties(self):
+        """Sub-issue #170: Assert mean 0, std 1 across active peers and 0 for inactive."""
+        raw = np.array([10.0, 20.0, 30.0, 40.0, 99.0])
+        mask = np.array([True, True, True, True, False])
+        z = normalize_quality_scores(raw, mask)
+
+        self.assertEqual(z[4], 0.0)
+        self.assertAlmostEqual(np.mean(z[:4]), 0.0, places=6)
+        self.assertAlmostEqual(np.std(z[:4], ddof=1), 1.0, places=6)
+
+    def test_quality_vector_ranks_high_drift_low_vol_highest(self):
+        """Sub-issue #168: High-drift, low-downside-vol asset receives highest q_i."""
+        np.random.seed(42)
+        t = 300
+        r_high = np.random.normal(0.0015, 0.008, size=(t, 1))
+        r_mid = np.random.normal(0.0001, 0.020, size=(t, 1))
+        r_low = np.random.normal(-0.0015, 0.045, size=(t, 1))
+
+        r_df = pd.DataFrame(
+            np.hstack([r_high, r_mid, r_low]),
+            columns=["HIGH_Q", "MID_Q", "LOW_Q"]
+        )
+        mask = np.ones((t, 3), dtype=bool)
+
+        q_mat = compute_fundamental_quality_scores(r_df, mask)
+        q_last = q_mat[-1]
+
+        self.assertEqual(q_mat.shape, (t, 3))
+        self.assertGreater(q_last[0], q_last[1])
+        self.assertGreater(q_last[1], q_last[2])
+
+    def test_higher_quality_constituents_receive_positive_allocation_tilts(self):
+        """Sub-issue #172: Higher quality constituents receive strictly higher weights."""
+        optimizer = ConvexPortfolioOptimizer()
+        # Equal variance and zero correlation across 3 assets
+        cov = np.eye(3) * 0.04
+        quality = np.array([-1.0, 0.0, 1.0])
+        # Baseline min-variance weights without tilt (lambda=0) -> equal 1/3 each
+        w_base, _ = optimizer.solve(cov, quality_scores=quality, lambda_tilt=0.0, equity_budget=1.0)
+        # Tilted weights (lambda=0.05)
+        w_tilted, _ = optimizer.solve(cov, quality_scores=quality, lambda_tilt=0.05, equity_budget=1.0)
+
+        # High quality asset (index 2) gets positive tilt above baseline; low quality (index 0) gets negative tilt
+        self.assertGreater(w_tilted[2], w_base[2])
+        self.assertLess(w_tilted[0], w_base[0])
+        self.assertGreater(w_tilted[2], w_tilted[1])
+        self.assertGreater(w_tilted[1], w_tilted[0])
+        self.assertAlmostEqual(np.sum(w_tilted), 1.0, places=6)
+
+
 
 if __name__ == "__main__":
     unittest.main()
