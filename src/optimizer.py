@@ -263,14 +263,14 @@ def compute_fundamental_quality_scores(
 
     return quality_matrix
 
-
 class ConvexPortfolioOptimizer:
     """
-    Sub-issues #162, #163, #164, #169: Formulates and solves the convex quadratic program (QP)
-    for portfolio variance minimization with optional linear quality tilts and long-only
-    budget constraints.
+    Sub-issues #162, #163, #164, #169, #174, #175, #176:
+    Formulates and solves the convex quadratic program (QP) for portfolio variance
+    minimization with optional linear quality tilts, dynamic concentration caps,
+    graceful inverse-volatility fallback, and parameterized problem caching for
+    high-speed rolling execution.
     """
-
     def __init__(
         self,
         solver: str = "CLARABEL",
@@ -278,6 +278,19 @@ class ConvexPortfolioOptimizer:
     ) -> None:
         self.solver = solver
         self.verbose = verbose
+        # Sub-issue #176: Cache compiled parameterized cvxpy problems keyed by
+        # (n_assets, has_tilt, has_upper_bound) to eliminate repeated canonicalization
+        self._problem_cache: dict = {}
+
+    @staticmethod
+    def compute_dynamic_upper_cap(n_active: int, max_cap: float = 0.35) -> float:
+        """
+        Sub-issue #174: Computes the dynamic single-asset upper weight cap:
+            w_max = min(0.35, 2 / N_t)
+        """
+        if n_active <= 0:
+            return 0.0
+        return float(min(max_cap, 2.0 / n_active))
 
     def construct_optimization_problem(
         self,
@@ -290,15 +303,13 @@ class ConvexPortfolioOptimizer:
     ) -> Tuple[cp.Variable, cp.Problem]:
         """
         Sub-issues #162, #163, #164, #169, #174:
-        Constructs convex optimization problem with dynamic concentration upper bound
-        w <= min(0.35, 2 / N_t).
+        Constructs a standalone convex optimization problem (used for structural inspection
+        and single-shot validation).
         """
         n = cov_matrix.shape[0]
         w = cp.Variable(n, name="weights")
-
         sigma_psd = cp.psd_wrap(cov_matrix)
         portfolio_variance = cp.quad_form(w, sigma_psd)
-
         if quality_scores is not None and lambda_tilt > 0.0:
             q = np.asarray(quality_scores, dtype=np.float64).flatten()
             if q.shape[0] != n:
@@ -306,32 +317,62 @@ class ConvexPortfolioOptimizer:
             objective = cp.Minimize(0.5 * portfolio_variance - lambda_tilt * (q @ w))
         else:
             objective = cp.Minimize(0.5 * portfolio_variance)
-
         constraints = [
             w >= 0.0,
             cp.sum(w) == equity_budget
         ]
-
-        # Sub-issue #174: Apply dynamic upper weight cap min(0.35, 2 / N_t)
         effective_upper = upper_bound
         if effective_upper is None and use_dynamic_cap and n > 0:
             effective_upper = self.compute_dynamic_upper_cap(n_active=n)
-
         if effective_upper is not None:
             constraints.append(w <= effective_upper)
-
         problem = cp.Problem(objective, constraints)
         return w, problem
 
-    @staticmethod
-    def compute_dynamic_upper_cap(n_active: int, max_cap: float = 0.35) -> float:
+    def _get_or_build_cached_problem(
+        self,
+        n: int,
+        has_tilt: bool,
+        has_upper_bound: bool
+    ) -> dict:
         """
-        Sub-issue #174: Computes the dynamic single-asset upper weight cap:
-            w_max = min(0.35, 2 / N_t)
+        Sub-issue #176: Builds or retrieves a pre-canonicalized cp.Problem backed by
+        cp.Parameter instances and Cholesky factor L (where Sigma = L^T L) so repeated
+        solves across rolling windows bypass symbolic AST construction.
         """
-        if n_active <= 0:
-            return 0.0
-        return float(min(max_cap, 2.0 / n_active))
+        cache_key = (n, has_tilt, has_upper_bound)
+        if cache_key in self._problem_cache:
+            return self._problem_cache[cache_key]
+        w = cp.Variable(n, name="weights")
+        chol_param = cp.Parameter((n, n), name="chol_factor")
+        budget_param = cp.Parameter(nonneg=True, name="equity_budget")
+        portfolio_variance = cp.sum_squares(chol_param @ w)
+        if has_tilt:
+            tilt_param = cp.Parameter(n, name="scaled_quality")
+            objective = cp.Minimize(0.5 * portfolio_variance - tilt_param @ w)
+        else:
+            tilt_param = None
+            objective = cp.Minimize(0.5 * portfolio_variance)
+        constraints = [
+            w >= 0.0,
+            cp.sum(w) == budget_param
+        ]
+        if has_upper_bound:
+            upper_param = cp.Parameter(nonneg=True, name="upper_bound")
+            constraints.append(w <= upper_param)
+        else:
+            upper_param = None
+        problem = cp.Problem(objective, constraints)
+        entry = {
+            "w": w,
+            "problem": problem,
+            "chol_param": chol_param,
+            "tilt_param": tilt_param,
+            "budget_param": budget_param,
+            "upper_param": upper_param,
+        }
+        self._problem_cache[cache_key] = entry
+        return entry
 
     def _inverse_volatility_fallback(
         self,
@@ -350,12 +391,15 @@ class ConvexPortfolioOptimizer:
             REGULARIZATION_EPSILON,
             vols
         )
+
         inv_vols = 1.0 / safe_vols
         sum_inv = float(np.sum(inv_vols))
+
         if sum_inv > 0.0 and np.isfinite(sum_inv):
             weights = (inv_vols / sum_inv) * equity_budget
         else:
             weights = np.full(n, equity_budget / n, dtype=np.float64)
+
         portfolio_var = float(weights.T @ cov_matrix @ weights)
         return weights, portfolio_var
 
@@ -369,23 +413,57 @@ class ConvexPortfolioOptimizer:
         use_dynamic_cap: bool = True
     ) -> Tuple[np.ndarray, float]:
         """
-        Sub-issue #175: Solves the formulated quadratic program with graceful fallback
-        to inverse-volatility weights if solvers fail or the constraints are infeasible.
+        Sub-issues #174, #175, #176: Solves the parameterized QP using cached problem
+        canonicalization and warm-starting, with graceful inverse-volatility fallback.
         """
         n = cov_matrix.shape[0]
         if n == 0 or equity_budget <= 0.0:
             return np.zeros(n), 0.0
-        w, problem = self.construct_optimization_problem(
-            cov_matrix=cov_matrix,
-            quality_scores=quality_scores,
-            lambda_tilt=lambda_tilt,
-            equity_budget=equity_budget,
-            upper_bound=upper_bound,
-            use_dynamic_cap=use_dynamic_cap
-        )
-        # 1. Primary Solver: CLARABEL
+
+        has_tilt = quality_scores is not None and lambda_tilt > 0.0
+        if has_tilt:
+            q = np.asarray(quality_scores, dtype=np.float64).flatten()
+            if q.shape[0] != n:
+                raise ValueError(f"quality_scores length {q.shape[0]} must match covariance dimension {n}")
+
+        effective_upper = upper_bound
+        if effective_upper is None and use_dynamic_cap and n > 0:
+            effective_upper = self.compute_dynamic_upper_cap(n_active=n)
+        has_upper_bound = effective_upper is not None
+
+        # Pre-check immediate infeasibility before invoking solver (#175 + #176 fast-path)
+        if has_upper_bound and (n * effective_upper < equity_budget - 1e-9):
+            logging.warning(
+                f"Infeasible upper bound {effective_upper:.4f} for N={n}, budget={equity_budget:.4f}. "
+                "Using inverse-vol fallback."
+            )
+            return self._inverse_volatility_fallback(cov_matrix, equity_budget)
+
+        # Compute upper Cholesky factor L such that L^T @ L == Sigma
         try:
-            problem.solve(solver=self.solver, verbose=self.verbose)
+            cov_sym = 0.5 * (cov_matrix + cov_matrix.T)
+            chol_upper = np.linalg.cholesky(cov_sym).T
+        except np.linalg.LinAlgError:
+            psd_cov = condition_covariance_matrix(cov_matrix)
+            chol_upper = np.linalg.cholesky(psd_cov).T
+
+        cached = self._get_or_build_cached_problem(
+            n=n,
+            has_tilt=has_tilt,
+            has_upper_bound=has_upper_bound
+        )
+        w = cached["w"]
+        problem = cached["problem"]
+        cached["chol_param"].value = chol_upper
+        cached["budget_param"].value = float(equity_budget)
+        if has_tilt:
+            cached["tilt_param"].value = lambda_tilt * q
+        if has_upper_bound:
+            cached["upper_param"].value = float(effective_upper)
+
+        # 1. Primary Solver: CLARABEL (warm-started)
+        try:
+            problem.solve(solver=self.solver, verbose=self.verbose, warm_start=True)
             if problem.status in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE] and w.value is not None:
                 weights = np.clip(w.value, 0.0, 1.0)
                 if np.sum(weights) > 0:
@@ -394,9 +472,10 @@ class ConvexPortfolioOptimizer:
             logging.warning(f"Solver {self.solver} returned status '{problem.status}'. Trying OSQP.")
         except Exception as e:
             logging.warning(f"Solver {self.solver} raised exception: {e}. Trying OSQP.")
-        # 2. Secondary Solver: OSQP
+
+        # 2. Secondary Solver: OSQP (warm-started)
         try:
-            problem.solve(solver="OSQP", verbose=self.verbose)
+            problem.solve(solver="OSQP", verbose=self.verbose, warm_start=True)
             if problem.status in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE] and w.value is not None:
                 weights = np.clip(w.value, 0.0, 1.0)
                 if np.sum(weights) > 0:
@@ -405,6 +484,7 @@ class ConvexPortfolioOptimizer:
             logging.warning(f"Fallback solver OSQP returned status '{problem.status}'. Using inverse-vol fallback.")
         except Exception as e_osqp:
             logging.error(f"Fallback solver OSQP raised exception: {e_osqp}. Using inverse-vol fallback.")
+
         # 3. Deterministic Fallback: Inverse-Volatility Allocation (#175)
         return self._inverse_volatility_fallback(cov_matrix, equity_budget)
 
