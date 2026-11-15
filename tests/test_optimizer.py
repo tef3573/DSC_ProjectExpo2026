@@ -292,7 +292,68 @@ class TestQualityScoreTilts(unittest.TestCase):
         self.assertGreater(w_tilted[1], w_tilted[0])
         self.assertAlmostEqual(np.sum(w_tilted), 1.0, places=6)
 
+class TestConcentrationBoundaryConstraints(unittest.TestCase):
+    """Sub-issues #174, #175, #176, #178: Test dynamic concentration caps, fallback, and caching."""
+    def setUp(self):
+        self.optimizer = ConvexPortfolioOptimizer()
 
+    def test_no_single_asset_exceeds_35_percent_across_universe_sizes(self):
+        """Sub-issue #178: Assert max(w) <= 0.35 even with aggressive quality tilts and skewed risk."""
+        for n in [3, 4, 5, 8, 12, 17]:
+            # Extreme variance dispersion: Asset 0 has ultra-low variance and max quality tilt
+            variances = np.linspace(0.001, 0.25, n)
+            cov = np.diag(variances)
+            quality = np.zeros(n)
+            quality[0] = 3.0  # Max positive quality score on lowest-volatility asset
+            weights, _ = self.optimizer.solve(
+                cov_matrix=cov,
+                quality_scores=quality,
+                lambda_tilt=5.0,
+                equity_budget=1.0
+            )
+            expected_cap = min(0.35, 2.0 / n)
+            self.assertAlmostEqual(np.sum(weights), 1.0, places=5)
+            self.assertLessEqual(np.max(weights), 0.35 + 1e-5)
+            self.assertLessEqual(np.max(weights), expected_cap + 1e-5)
+
+    def test_sparse_universe_budget_respects_35_percent_ceiling(self):
+        """Sub-issue #178: For Nt < 3, equity_budget = 1/3 keeps all weights strictly <= 35%."""
+        for n in [1, 2]:
+            cov = np.eye(n) * 0.04
+            weights, _ = self.optimizer.solve(
+                cov_matrix=cov,
+                equity_budget=1.0 / 3.0
+            )
+            self.assertAlmostEqual(np.sum(weights), 1.0 / 3.0, places=5)
+            self.assertLessEqual(np.max(weights), 0.35)
+
+    def test_infeasible_upper_bound_triggers_inverse_volatility_fallback(self):
+        """Sub-issue #175: Infeasible upper cap gracefully falls back to inverse-volatility."""
+        # 4 assets with distinct volatilities (0.10, 0.20, 0.20, 0.40)
+        cov = np.diag([0.01, 0.04, 0.04, 0.16])
+        # upper_bound = 0.10 with N=4 implies max possible sum = 0.40 < 1.0 (infeasible)
+        weights, _ = self.optimizer.solve(
+            cov_matrix=cov,
+            equity_budget=1.0,
+            upper_bound=0.10
+        )
+        self.assertAlmostEqual(np.sum(weights), 1.0, places=6)
+        # Lowest-vol asset (index 0, sigma=0.10) must receive highest inverse-vol weight
+        self.assertGreater(weights[0], weights[1])
+        self.assertGreater(weights[1], weights[3])
+
+    def test_cached_parameterized_problem_reuse(self):
+        """Sub-issue #176: Repeated solves with identical dimensions reuse cached cp.Problem."""
+        cov1 = np.eye(5) * 0.04
+        cov2 = np.eye(5) * 0.09
+        q1 = np.array([1.0, 0.5, 0.0, -0.5, -1.0])
+        q2 = np.array([-1.0, -0.5, 0.0, 0.5, 1.0])
+        w1, _ = self.optimizer.solve(cov1, quality_scores=q1, lambda_tilt=0.2)
+        cache_size_after_first = len(self.optimizer._problem_cache)
+        w2, _ = self.optimizer.solve(cov2, quality_scores=q2, lambda_tilt=0.2)
+        self.assertEqual(len(self.optimizer._problem_cache), cache_size_after_first)
+        self.assertGreater(w1[0], w1[4])
+        self.assertGreater(w2[4], w2[0])
 
 if __name__ == "__main__":
     unittest.main()
