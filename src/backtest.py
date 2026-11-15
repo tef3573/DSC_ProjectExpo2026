@@ -1,20 +1,27 @@
 """
-src/backtest.py
 Vectorized Portfolio Backtesting Engine with Institutional Friction and Artifact Export.
 - Sub-issues #104, #106, #107, #108, #110: Core simulation and friction mechanics.
 - Sub-issue #127: Export comprehensive daily time series to data/backtest_results.csv.
 - Sub-issue #129: Format console scorecard table for clean terminal output.
 - Sub-issue #135: Clean code refactor and pylint compliance.
+- Sub-issue #179: Integrate src/optimizer.py allocation schemes with src/backtest.py engine.
 """
 from pathlib import Path
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any, Optional
 import logging
 import numpy as np
 import pandas as pd
-
 from src.metrics import (
     build_summary_metrics_dict,
     export_summary_metrics,
+)
+from src.optimizer import (
+    CovarianceEstimator,
+    ConvexPortfolioOptimizer,
+    compute_inverse_volatility_weights,
+    compute_fundamental_quality_scores,
+    DEFAULT_LOOKBACK_DAYS,
+    MIN_OBSERVATIONS_REQUIRED,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -24,6 +31,7 @@ DATA_DIR = BASE_DIR / "data"
 PRICES_PATH = DATA_DIR / "prices_daily.csv"
 MASK_PATH = DATA_DIR / "universe_mask.csv"
 DEFAULT_EXPORT_PATH = DATA_DIR / "backtest_results.csv"
+VALID_ALLOCATION_SCHEMES = ("equal_weight", "inverse_vol", "convex_quality")
 
 
 def compute_returns(prices: pd.DataFrame) -> pd.DataFrame:
@@ -38,7 +46,6 @@ def compute_equal_weights(
     """Computes dynamic equal target weights with cash-drag concentration defense."""
     n_t = universe_mask.sum(axis=1)
     stock_weights = pd.DataFrame(0.0, index=universe_mask.index, columns=universe_mask.columns)
-
     normal_mask = n_t >= min_diversification
     for col in universe_mask.columns:
         stock_weights.loc[normal_mask, col] = np.where(
@@ -46,7 +53,6 @@ def compute_equal_weights(
             1.0 / n_t.loc[normal_mask],
             0.0
         )
-
     defensive_mask = (n_t > 0) & (n_t < min_diversification)
     for col in universe_mask.columns:
         stock_weights.loc[defensive_mask, col] = np.where(
@@ -54,9 +60,120 @@ def compute_equal_weights(
             1.0 / min_diversification,
             0.0
         )
-
     equity_total = stock_weights.sum(axis=1)
     cash_weights = 1.0 - equity_total
+    return stock_weights, cash_weights, n_t
+
+
+def compute_target_weights(
+    universe_mask: pd.DataFrame,
+    asset_returns: Optional[pd.DataFrame] = None,
+    allocation_scheme: str = "equal_weight",
+    min_diversification: int = 3,
+    lookback_window: int = DEFAULT_LOOKBACK_DAYS,
+    lambda_tilt: float = 0.5,
+    rebalance_monthly: bool = True
+) -> Tuple[pd.DataFrame, pd.Series, pd.Series]:
+    """
+    Sub-issue #179: Dispatches target weight generation across supported optimization
+    schemes ('equal_weight', 'inverse_vol', 'convex_quality') while enforcing
+    point-in-time causality and sparse-universe concentration defense.
+    """
+    if allocation_scheme not in VALID_ALLOCATION_SCHEMES:
+        raise ValueError(
+            f"Unsupported allocation_scheme '{allocation_scheme}'. "
+            f"Expected one of {VALID_ALLOCATION_SCHEMES}."
+        )
+
+    if allocation_scheme == "equal_weight":
+        return compute_equal_weights(universe_mask, min_diversification=min_diversification)
+
+    if asset_returns is None:
+        raise ValueError(f"asset_returns is required for allocation_scheme='{allocation_scheme}'.")
+
+    tickers = list(universe_mask.columns)
+    aligned_returns = asset_returns[tickers].loc[universe_mask.index]
+    prior_returns = aligned_returns.shift(1).fillna(0.0)
+    mask_arr = universe_mask.values.astype(bool)
+    n_t = universe_mask.sum(axis=1)
+
+    if allocation_scheme == "inverse_vol":
+        weights_arr = compute_inverse_volatility_weights(
+            returns=prior_returns,
+            active_mask=mask_arr,
+            lookback_window=MIN_OBSERVATIONS_REQUIRED,
+            concentration_defense=True
+        )
+        stock_weights = pd.DataFrame(weights_arr, index=universe_mask.index, columns=tickers)
+        cash_weights = 1.0 - stock_weights.sum(axis=1)
+        return stock_weights, cash_weights, n_t
+
+    t_len, n_assets = mask_arr.shape
+    weights_arr = np.zeros((t_len, n_assets), dtype=np.float64)
+
+    cov_estimator = CovarianceEstimator(lookback_window=lookback_window)
+    qp_optimizer = ConvexPortfolioOptimizer()
+    quality_matrix = compute_fundamental_quality_scores(
+        returns=prior_returns,
+        active_mask=mask_arr,
+        lookback_window=lookback_window
+    )
+
+    ret_values = prior_returns.values
+    dates = universe_mask.index
+    current_weights = np.zeros(n_assets, dtype=np.float64)
+
+    for idx in range(t_len):
+        active_row = mask_arr[idx]
+        active_indices = np.where(active_row)[0]
+        n_active = len(active_indices)
+
+        if n_active == 0:
+            current_weights = np.zeros(n_assets, dtype=np.float64)
+            weights_arr[idx] = current_weights
+            continue
+
+        is_first_session = idx == 0
+        is_month_start = (
+            not is_first_session
+            and (dates[idx].month != dates[idx - 1].month or dates[idx].year != dates[idx - 1].year)
+        )
+        membership_changed = (
+            not is_first_session
+            and not np.array_equal(active_row, mask_arr[idx - 1])
+        )
+
+        if not rebalance_monthly or is_first_session or is_month_start or membership_changed:
+            equity_budget = (1.0 / min_diversification) if n_active < min_diversification else 1.0
+            start_idx = max(0, idx - lookback_window + 1)
+            window_slice = prior_returns.iloc[start_idx:idx + 1, active_indices]
+
+            if len(window_slice) >= 2 and n_active >= 2:
+                cov_sub, _ = cov_estimator.estimate(window_slice)
+                q_sub = quality_matrix[idx, active_indices]
+                w_sub, _ = qp_optimizer.solve(
+                    cov_matrix=cov_sub,
+                    quality_scores=q_sub,
+                    lambda_tilt=lambda_tilt,
+                    equity_budget=equity_budget
+                )
+            else:
+                w_sub = np.full(n_active, equity_budget / n_active, dtype=np.float64)
+
+            current_weights = np.zeros(n_assets, dtype=np.float64)
+            current_weights[active_indices] = w_sub
+        else:
+            day_r = ret_values[idx]
+            grown = current_weights * (1.0 + day_r)
+            total_eq = float(np.sum(grown))
+            target_budget = (1.0 / min_diversification) if n_active < min_diversification else 1.0
+            if total_eq > 0.0:
+                current_weights = (grown / total_eq) * target_budget
+
+        weights_arr[idx] = current_weights
+
+    stock_weights = pd.DataFrame(weights_arr, index=universe_mask.index, columns=tickers)
+    cash_weights = 1.0 - stock_weights.sum(axis=1)
     return stock_weights, cash_weights, n_t
 
 
@@ -126,7 +243,7 @@ def format_scorecard_table(summary: Dict[str, Any]) -> str:
         f"{'Sharpe Ratio (Rf=1.5%)':<32} {strat.get('sharpe_ratio', 0.0):>16.2f} {spy.get('benchmark_sharpe', 0.0):>16.2f} {rsp.get('benchmark_sharpe', 0.0):>18.2f}",
         f"{'Sortino Ratio':<32} {strat.get('sortino_ratio', 0.0):>16.2f} {'N/A':>16} {'N/A':>18}",
         f"{'Calmar Ratio':<32} {strat.get('calmar_ratio', 0.0):>16.2f} {'N/A':>16} {'N/A':>18}",
-        f"{'Maximum Drawdown (MDD)':<32} {strat.get('max_drawdown', 0.0):>15.2%} {spy.get('benchmark_mdd', 0.0):>15.2%} {rsp.get('benchmark_mdd', 0.0):>17.2%}",
+        f"{'Maximum Drawdown (MDD)':<32} {strat.get('max_drawdown', 0.0):>15.2%} {spy.get('benchmark_mdd', 0.0):>15.2%}{rsp.get('benchmark_mdd', 0.0):>17.2%}",
         "-" * width,
         f"{'Beta vs Benchmark':<32} {'N/A':>16} {spy.get('beta', 1.0):>16.2f} {rsp.get('beta', 1.0):>18.2f}",
         f"{'Jensen Alpha (Annualized)':<32} {'N/A':>16} {spy.get('alpha_annual', 0.0):>15.2%} {rsp.get('alpha_annual', 0.0):>17.2%}",
@@ -148,7 +265,10 @@ def run_backtest(
     fee_bps: float = 10.0,
     rf_annual: float = 0.015,
     min_diversification: int = 3,
-    export_results: bool = True
+    export_results: bool = True,
+    allocation_scheme: str = "equal_weight",
+    lambda_tilt: float = 0.5,
+    rebalance_monthly: bool = True
 ) -> pd.DataFrame:
     """Executes full vectorized point-in-time backtest and generates daily performance curves."""
     returns = compute_returns(prices)
@@ -158,8 +278,13 @@ def run_backtest(
     returns = returns.loc[common_idx]
 
     rf_daily = (1.0 + rf_annual) ** (1.0 / 252.0) - 1.0
-    stock_weights, cash_weights, n_t = compute_equal_weights(
-        mask, min_diversification=min_diversification
+    stock_weights, cash_weights, n_t = compute_target_weights(
+        universe_mask=mask,
+        asset_returns=returns,
+        allocation_scheme=allocation_scheme,
+        min_diversification=min_diversification,
+        lambda_tilt=lambda_tilt,
+        rebalance_monthly=rebalance_monthly
     )
 
     portfolio_gross = pd.Series(0.0, index=common_idx)
