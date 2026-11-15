@@ -165,3 +165,30 @@ $$\min_{w} \quad \frac{1}{2} w^{\top} \Sigma^{*} w - \lambda \, q_t^{\top} w$$
 $$\text{subject to} \quad w \ge 0, \quad \sum_{i=1}^{N} w_i = B_t$$
 
 Because $-\lambda \, q_t^{\top} w$ is affine in $w$ and $\Sigma^{*} \in \mathbb{S}_{+}^{N}$ is positive semi-definite, the composite objective remains strictly convex and Disciplined Convex Programming (DCP) compliant.
+
+---
+
+## 6. Concentration Boundary Constraints & Execution Architecture
+
+### 6.1 Dynamic Upper Weight Cap ($w_{\max} = \min(0.35, \, 2 / N_t)$) (#174)
+Unconstrained minimum-variance and quality-tilted optimizers tend to concentrate capital in a handful of low-volatility or high-momentum outliers—exposing the portfolio to single-issuer idiosyncratic event risk (such as executive transitions, earnings shocks, or distress in micro-cap names like `CARV` or `UONE`).
+
+To enforce institutional diversification across changing universe sizes $N_t$, each constituent weight $w_i$ is bounded above by a dynamic regime-adaptive ceiling:
+
+$$w_i \le w_{\max}(N_t) = \min\left(0.35, \, \frac{2}{N_t}\right)$$
+
+| Active Universe Size ($N_t$) | Dynamic Cap $\min(0.35, 2/N_t)$ | Equity Budget ($B_t$) | Economic & Feasibility Rationale |
+| :--- | :--- | :--- | :--- |
+| **$N_t \ge 6$** | $\frac{2}{N_t} \le 33.33\%$ | $1.00$ ($100\%$) | Scales down proportionally as the roster expands (e.g., $11.76\%$ max at $N_t = 17$), preventing mega-cap dominance while allowing active $2\times$ overweight conviction relative to equal weight. |
+| **$3 \le N_t \le 5$** | $35.00\%$ | $1.00$ ($100\%$) | Hard institutional ceiling prevents any single company from exceeding $35\%$ of capital while guaranteeing strict feasibility ($3 \times 0.35 = 1.05 > 1.00$). |
+| **$N_t \in \{1, 2\}$** | $\min(0.35, 2/N_t) = 0.35$ | $\frac{1}{3}$ ($33.33\%$) | Sparse-universe concentration defense holds $\ge 66.67\%$ in cash; individual equity weights cannot exceed $33.33\% < 35\%$. |
+
+### 6.2 Graceful Inverse-Volatility Fallback (#175)
+If external custom bounds render the feasible set empty ($N_t \cdot w_{\max} < B_t$) or numerical ill-conditioning causes both `CLARABEL` and `OSQP` to return non-optimal statuses, the optimizer bypasses solver failure via a deterministic inverse-volatility fallback derived from the diagonal of $\Sigma^{*}$:
+
+$$w_{i, \text{fallback}} = B_t \cdot \frac{\left(\max(\sqrt{\Sigma^{*}_{ii}}, \epsilon)\right)^{-1}}{\sum_{j \in \mathcal{A}_t} \left(\max(\sqrt{\Sigma^{*}_{jj}}, \epsilon)\right)^{-1}}$$
+
+This preserves risk-parity proportionality and budget compliance without halting multi-decade rolling simulations.
+
+### 6.3 Parameterized Problem Caching & Cholesky Reformulation (#176)
+To eliminate repeated symbolic AST canonicalization across thousands of rolling rebalance dates, `ConvexPortfolioOptimizer` caches compiled `cvxpy` problem graphs keyed by `(n_assets, has_tilt, has_upper_bound)`. The quadratic variance form $w^{\top}\Sigma^{*}w$ is expressed via upper Cholesky factorization ($\Sigma^{*} = L^{\top}L$) as $\|L w\|_2^2$ (`cp.sum_squares(chol_param @ w)`), allowing rolling updates to mutate `cp.Parameter` values in place with `warm_start=True`.
