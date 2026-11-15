@@ -319,10 +319,16 @@ def export_backtest_results(
     results_df: pd.DataFrame,
     export_path: Path = DEFAULT_EXPORT_PATH
 ) -> Path:
-    """Formats and exports complete daily backtest time series."""
+    """Formats and exports complete daily backtest time series including optimized curves."""
     export_path.parent.mkdir(parents=True, exist_ok=True)
-    results_df.to_csv(export_path, index=True)
-    logging.info("Sub-issue #127: Exported daily time series to %s", export_path)
+    out_df = results_df.copy()
+    if COMPARATIVE_EXPORT_PATH.exists():
+        comp_df = pd.read_csv(COMPARATIVE_EXPORT_PATH, index_col=0, parse_dates=True)
+        for col in ("Convex_Quality_Net", "Convex_Quality_Cumulative", "Convex_Quality_Drawdown"):
+            if col in comp_df.columns and col not in out_df.columns:
+                out_df[col] = comp_df[col].reindex(out_df.index)
+    out_df.to_csv(export_path, index=True)
+    logging.info("Sub-issue #127 & #192: Exported daily time series to %s", export_path)
     return export_path
 
 
