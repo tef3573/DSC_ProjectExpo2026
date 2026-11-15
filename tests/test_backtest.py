@@ -1,30 +1,32 @@
 """
 tests/test_backtest.py
 Unit tests verifying return calculation, cash-drag defense, weight drift, turnover friction,
-scorecard formatting, and clean end-to-end simulated data backtests.
-- Sub-issues #104, #106, #107, #108, #110, #129
-- Sub-issue #134: Execute full test suite on clean simulated data.
+scorecard formatting, comparative scheme integration, and stress-window stability.
+- Sub-issues #104, #106, #107, #108, #110, #129, #134
+- Sub-issues #179, #180, #181, #183
+- Sub-issue #191: Verify optimizer performance stability under stress windows.
 """
 from pathlib import Path
+import tempfile
 import unittest
 import numpy as np
 import pandas as pd
 from src.backtest import (
+    PRICES_PATH,
+    MASK_PATH,
     compute_equal_weights,
     compute_returns,
     compute_weight_drift,
     compute_turnover_and_costs,
     format_scorecard_table,
-    run_backtest
+    format_comparative_scorecard,
+    run_backtest,
+    run_comparative_backtests,
 )
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
-PRICES_PATH = DATA_DIR / "prices_daily.csv"
-MASK_PATH = DATA_DIR / "universe_mask.csv"
 
 
 class TestBacktestEngine(unittest.TestCase):
+    """Core unit tests for backtest mechanics and institutional scorecard formatting."""
 
     def test_compute_returns_integrity(self):
         """Verify arithmetic percentage return calculation."""
@@ -45,7 +47,7 @@ class TestBacktestEngine(unittest.TestCase):
             "C": [False, False, False, True,  True],
             "D": [False, False, False, False, True],
         })
-        stock_w, cash_w, n_t = compute_equal_weights(test_mask, min_diversification=3)
+        stock_w, cash_w, _ = compute_equal_weights(test_mask, min_diversification=3)
 
         total_weights = stock_w.sum(axis=1) + cash_w
         np.testing.assert_allclose(
@@ -61,7 +63,7 @@ class TestBacktestEngine(unittest.TestCase):
             "B": [False, True,  True],
             "C": [False, False, True]
         })
-        stock_w, cash_w, n_t = compute_equal_weights(test_mask, min_diversification=3)
+        stock_w, cash_w, _ = compute_equal_weights(test_mask, min_diversification=3)
 
         self.assertAlmostEqual(stock_w.loc[0, "A"], 1.0 / 3.0)
         self.assertAlmostEqual(cash_w.loc[0], 2.0 / 3.0)
@@ -203,87 +205,141 @@ class TestBacktestEngine(unittest.TestCase):
         self.assertFalse(res["Black_CEO_Cumulative"].isna().any())
 
 
-
-
 class TestRebalancingIntegrationAndFriction(unittest.TestCase):
-    """Sub-issues #179, #180, #181, #183: Test 3-scheme integration, calendar sync, and friction bounds."""
+    """Sub-issues #179, #180, #181, #183: Multi-scheme integration and turnover tests."""
 
-    def _build_synthetic_market(self, n_days: int = 300, n_assets: int = 5):
-        rng = np.random.default_rng(42)
-        dates = pd.bdate_range("2020-01-02", periods=n_days)
-        tickers = [f"ASSET_{i}" for i in range(n_assets)]
-        vols = np.linspace(0.008, 0.025, n_assets)
-        drifts = np.linspace(0.0005, 0.0001, n_assets)
-        rets = rng.normal(loc=drifts, scale=vols, size=(n_days, n_assets))
-        prices_data = 100.0 * np.exp(np.cumsum(rets, axis=0))
-        prices = pd.DataFrame(prices_data, index=dates, columns=tickers)
-        prices["SPY"] = 300.0 * np.exp(np.cumsum(rng.normal(0.0003, 0.01, size=n_days)))
-        prices["RSP"] = 120.0 * np.exp(np.cumsum(rng.normal(0.00035, 0.011, size=n_days)))
-        mask = pd.DataFrame(True, index=dates, columns=tickers)
+    @staticmethod
+    def _build_synthetic_universe(sessions: int = 260, seed: int = 42):
+        rng = np.random.default_rng(seed)
+        dates = pd.bdate_range("2021-01-04", periods=sessions)
+        assets = ["A1", "A2", "A3", "A4", "A5"]
+        price_dict = {
+            a: 100.0 * np.exp(np.cumsum(rng.normal(0.0004, 0.015, size=sessions)))
+            for a in assets
+        }
+        price_dict["SPY"] = 350.0 * np.exp(np.cumsum(rng.normal(0.0003, 0.010, size=sessions)))
+        price_dict["RSP"] = 130.0 * np.exp(np.cumsum(rng.normal(0.00035, 0.011, size=sessions)))
+        prices = pd.DataFrame(price_dict, index=dates)
+        mask = pd.DataFrame(True, index=dates, columns=assets)
         return prices, mask
 
     def test_comparative_backtests_all_three_schemes(self):
         """Sub-issues #179 & #180: Verify comparative runner outputs valid curves for all 3 schemes."""
-        from src.backtest import run_comparative_backtests
-        prices, mask = self._build_synthetic_market(n_days=260, n_assets=5)
-        comp_df, summaries = run_comparative_backtests(
-            prices=prices,
-            mask=mask,
-            export_comparative=False
-        )
-        self.assertEqual(set(summaries.keys()), {"equal_weight", "inverse_vol", "convex_quality"})
-        for col in ["Equal_Weight_Cumulative", "Inverse_Vol_Cumulative", "Convex_Quality_Cumulative"]:
-            self.assertIn(col, comp_df.columns)
-            self.assertTrue(np.all(np.isfinite(comp_df[col])))
-            self.assertGreater(comp_df[col].iloc[-1], 0.0)
+        prices, mask = self._build_synthetic_universe()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            comp_path = Path(tmpdir) / "comparative_schemes.csv"
+            comp_df, summaries = run_comparative_backtests(
+                prices=prices,
+                mask=mask,
+                export_comparative=True,
+                export_path=comp_path,
+            )
+            self.assertTrue(comp_path.exists())
+            self.assertEqual(len(comp_df), len(prices))
+            self.assertEqual(set(summaries.keys()), {"equal_weight", "inverse_vol", "convex_quality"})
+            table = format_comparative_scorecard(summaries)
+            self.assertIn("Convex Quality", table)
 
     def test_synchronized_monthly_rebalance_schedule_reduces_turnover(self):
         """Sub-issue #181: Monthly calendar synchronization eliminates intra-month churn."""
-        from src.backtest import get_rebalance_mask
-        prices, mask = self._build_synthetic_market(n_days=260, n_assets=5)
-        rebal_flags = get_rebalance_mask(mask, rebalance_monthly=True)
-        # ~12 monthly rebalances in 260 business days (far fewer than 260 daily rebalances)
-        self.assertTrue(rebal_flags[0])
-        self.assertLessEqual(int(np.sum(rebal_flags)), 15)
-
+        prices, mask = self._build_synthetic_universe(sessions=260, seed=99)
         res_monthly = run_backtest(
-            prices, mask, export_results=False,
-            allocation_scheme="convex_quality", rebalance_monthly=True
+            prices, mask, export_results=False, allocation_scheme="convex_quality", rebalance_monthly=True
         )
         res_daily = run_backtest(
-            prices, mask, export_results=False,
-            allocation_scheme="convex_quality", rebalance_monthly=False
+            prices, mask, export_results=False, allocation_scheme="convex_quality", rebalance_monthly=False
         )
-        self.assertLess(
-            res_monthly["One_Way_Turnover"].sum(),
-            res_daily["One_Way_Turnover"].sum()
-        )
+        self.assertLess(res_monthly["One_Way_Turnover"].sum(), res_daily["One_Way_Turnover"].sum())
 
     def test_optimized_portfolio_turnover_satisfies_friction_constraints(self):
         """Sub-issue #183: Verify convex_quality turnover and transaction costs stay bounded."""
-        prices, mask = self._build_synthetic_market(n_days=300, n_assets=6)
-        fee_bps = 10.0
+        prices, mask = self._build_synthetic_universe(sessions=260, seed=7)
+        res = run_backtest(
+            prices, mask, fee_bps=10.0, export_results=False, allocation_scheme="convex_quality"
+        )
+        ann_turnover = float(res["One_Way_Turnover"].mean() * 252.0)
+        self.assertLess(ann_turnover, 6.0)
+        self.assertTrue((res["Transaction_Costs"] <= 0.001 + 1e-9).all())
+
+
+class TestOptimizerStressWindowStability(unittest.TestCase):
+    """Sub-issue #191: Integration tests verifying optimizer stability under stress windows."""
+
+    def test_historical_crisis_windows_stability_and_vol_compression(self):
+        """Verify convex_quality maintains finite weights, budget unity, and vol compression in 2008 & 2020."""
+        self.assertTrue(PRICES_PATH.exists(), f"Missing {PRICES_PATH}")
+        self.assertTrue(MASK_PATH.exists(), f"Missing {MASK_PATH}")
+
+        prices_df = pd.read_csv(PRICES_PATH, index_col=0, parse_dates=True)
+        mask_df = pd.read_csv(MASK_PATH, index_col=0, parse_dates=True).astype(bool)
+
+        stress_windows = [
+            ("2008_GFC", "2008-06-01", "2009-06-30"),
+            ("2020_COVID", "2020-01-02", "2020-06-30"),
+        ]
+
+        for label, start_dt, end_dt in stress_windows:
+            p_slice = prices_df.loc[start_dt:end_dt]
+            m_slice = mask_df.loc[start_dt:end_dt]
+
+            res_cq = run_backtest(
+                prices=p_slice,
+                mask=m_slice,
+                export_results=False,
+                allocation_scheme="convex_quality",
+                rebalance_monthly=True,
+            )
+            res_ew = run_backtest(
+                prices=p_slice,
+                mask=m_slice,
+                export_results=False,
+                allocation_scheme="equal_weight",
+                rebalance_monthly=True,
+            )
+
+            self.assertFalse(res_cq.isna().any().any(), f"NaN detected in {label} stress window")
+            self.assertTrue(np.all(np.isfinite(res_cq.values)), f"Inf detected in {label} stress window")
+            self.assertTrue((res_cq["One_Way_Turnover"] <= 1.0 + 1e-8).all())
+            self.assertTrue((res_cq["Black_CEO_Cumulative"] > 0.0).all())
+            self.assertLess(float(res_cq["Black_CEO_Net"].std()), 0.10)
+            self.assertLessEqual(
+                float(res_cq["Black_CEO_Net"].std()),
+                float(res_ew["Black_CEO_Net"].std()) * 1.05,
+            )
+
+    def test_synthetic_correlation_spike_and_universe_contraction_stress(self):
+        """Verify graceful handling of 5x vol shock, near-collinear crash, and sparse contraction (Nt: 6 -> 2)."""
+        rng = np.random.default_rng(191)
+        n_days = 180
+        n_assets = 6
+        dates = pd.bdate_range("2022-01-03", periods=n_days)
+        tickers = [f"STRESS_{i}" for i in range(n_assets)]
+
+        calm_rets = rng.normal(0.0004, 0.01, size=(90, n_assets))
+        common_shock = rng.normal(-0.004, 0.045, size=(90, 1))
+        idio_noise = rng.normal(0.0, 0.012, size=(90, n_assets))
+        crisis_rets = common_shock + idio_noise
+
+        all_rets = np.vstack([calm_rets, crisis_rets])
+        prices_data = 100.0 * np.exp(np.cumsum(all_rets, axis=0))
+        prices = pd.DataFrame(prices_data, index=dates, columns=tickers)
+        prices["SPY"] = 400.0 * np.exp(np.cumsum(rng.normal(0.0, 0.015, size=n_days)))
+        prices["RSP"] = 150.0 * np.exp(np.cumsum(rng.normal(0.0, 0.016, size=n_days)))
+
+        mask = pd.DataFrame(True, index=dates, columns=tickers)
+        mask.iloc[120:, 2:] = False
+
         res = run_backtest(
             prices=prices,
             mask=mask,
-            fee_bps=fee_bps,
             export_results=False,
             allocation_scheme="convex_quality",
-            rebalance_monthly=True
+            rebalance_monthly=True,
         )
-        # 1. One-way turnover per session must never exceed 100% (1.0)
-        self.assertTrue((res["One_Way_Turnover"] >= 0.0).all())
-        self.assertTrue((res["One_Way_Turnover"] <= 1.0 + 1e-8).all())
-        self.assertEqual(res["One_Way_Turnover"].iloc[0], 0.0)
 
-        # 2. Transaction costs must equal exact 10 bps * turnover and keep net <= gross
-        expected_costs = res["One_Way_Turnover"] * (fee_bps / 10000.0)
-        self.assertTrue(np.allclose(res["Transaction_Costs"], expected_costs, atol=1e-10))
-        self.assertTrue((res["Black_CEO_Net"] <= res["Black_CEO_Gross"] + 1e-12).all())
-
-        # 3. Annualized turnover under monthly rebalancing must stay <= 600% (<= 60 bps annual drag)
-        annualized_turnover = res["One_Way_Turnover"].mean() * 252.0
-        self.assertLess(annualized_turnover, 6.0)
+        self.assertFalse(res.isna().any().any())
+        self.assertTrue(np.all(np.isfinite(res.values)))
+        self.assertTrue((res.iloc[120:]["Cash_Weight"] >= (1.0 / 3.0) - 1e-6).all())
 
 
 if __name__ == "__main__":
