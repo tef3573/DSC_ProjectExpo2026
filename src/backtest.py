@@ -1,20 +1,16 @@
 """
-src/backtest.py
 Vectorized Portfolio Backtesting Engine with Institutional Friction and Artifact Export.
 - Sub-issues #104, #106, #107, #108, #110: Core simulation and friction mechanics.
 - Sub-issue #127: Export comprehensive daily time series to data/backtest_results.csv.
 - Sub-issue #129: Format console scorecard table for clean terminal output.
 - Sub-issue #135: Clean code refactor and pylint compliance.
 - Sub-issue #179: Integrate src/optimizer.py allocation schemes with src/backtest.py engine.
-- Sub-issue #180: Generate comparative performance curves for all 3 schemes.
-- Sub-issue #181: Sync monthly rebalancing calendar across optimizers.
 """
 from pathlib import Path
 from typing import Tuple, Dict, Any, Optional
 import logging
 import numpy as np
 import pandas as pd
-
 from src.metrics import (
     build_summary_metrics_dict,
     export_summary_metrics,
@@ -35,15 +31,13 @@ DATA_DIR = BASE_DIR / "data"
 PRICES_PATH = DATA_DIR / "prices_daily.csv"
 MASK_PATH = DATA_DIR / "universe_mask.csv"
 DEFAULT_EXPORT_PATH = DATA_DIR / "backtest_results.csv"
-COMPARATIVE_EXPORT_PATH = DATA_DIR / "comparative_schemes.csv"
-
 VALID_ALLOCATION_SCHEMES = ("equal_weight", "inverse_vol", "convex_quality")
+COMPARATIVE_EXPORT_PATH = DATA_DIR / "comparative_schemes.csv"
 
 
 def compute_returns(prices: pd.DataFrame) -> pd.DataFrame:
     """Computes arithmetic daily percentage returns without deprecation warnings."""
     return prices.pct_change(fill_method=None).fillna(0.0)
-
 
 def compute_equal_weights(
     universe_mask: pd.DataFrame,
@@ -52,7 +46,6 @@ def compute_equal_weights(
     """Computes dynamic equal target weights with cash-drag concentration defense."""
     n_t = universe_mask.sum(axis=1)
     stock_weights = pd.DataFrame(0.0, index=universe_mask.index, columns=universe_mask.columns)
-
     normal_mask = n_t >= min_diversification
     for col in universe_mask.columns:
         stock_weights.loc[normal_mask, col] = np.where(
@@ -60,7 +53,6 @@ def compute_equal_weights(
             1.0 / n_t.loc[normal_mask],
             0.0
         )
-
     defensive_mask = (n_t > 0) & (n_t < min_diversification)
     for col in universe_mask.columns:
         stock_weights.loc[defensive_mask, col] = np.where(
@@ -68,11 +60,9 @@ def compute_equal_weights(
             1.0 / min_diversification,
             0.0
         )
-
     equity_total = stock_weights.sum(axis=1)
     cash_weights = 1.0 - equity_total
     return stock_weights, cash_weights, n_t
-
 
 def get_rebalance_mask(
     universe_mask: pd.DataFrame,
@@ -88,10 +78,8 @@ def get_rebalance_mask(
     mask_arr = universe_mask.values.astype(bool)
     t_len = mask_arr.shape[0]
     dates = universe_mask.index
-
     if not rebalance_monthly:
         return np.ones(t_len, dtype=bool)
-
     rebal_flags = np.zeros(t_len, dtype=bool)
     for idx in range(t_len):
         if idx == 0:
@@ -103,7 +91,6 @@ def get_rebalance_mask(
         )
         membership_changed = not np.array_equal(mask_arr[idx], mask_arr[idx - 1])
         rebal_flags[idx] = is_month_start or membership_changed
-
     return rebal_flags
 
 
@@ -121,7 +108,6 @@ def _apply_synchronized_rebalance_schedule(
     t_len, n_assets = raw_target_weights.shape
     scheduled_weights = np.zeros((t_len, n_assets), dtype=np.float64)
     current_weights = np.zeros(n_assets, dtype=np.float64)
-
     for idx in range(t_len):
         n_active = int(np.sum(active_mask[idx]))
         if n_active == 0:
@@ -136,11 +122,8 @@ def _apply_synchronized_rebalance_schedule(
                 current_weights = (grown / total_eq) * target_budget
             else:
                 current_weights = raw_target_weights[idx].copy()
-
         scheduled_weights[idx] = current_weights
-
     return scheduled_weights
-
 
 def compute_target_weights(
     universe_mask: pd.DataFrame,
@@ -320,7 +303,6 @@ def format_scorecard_table(summary: Dict[str, Any]) -> str:
     strat = summary.get("strategy_performance", {})
     spy = summary.get("benchmark_spy_full_horizon", {})
     rsp = summary.get("benchmark_rsp_isolated", {})
-
     width = 86
     lines = [
         "=" * width,
@@ -348,7 +330,6 @@ def format_scorecard_table(summary: Dict[str, Any]) -> str:
         "=" * width,
     ]
     return "\n".join(lines)
-
 
 def run_backtest(
     prices: pd.DataFrame,
@@ -433,6 +414,8 @@ def run_backtest(
 
     return df_out
 
+    COMPARATIVE_EXPORT_PATH = DATA_DIR / "comparative_schemes.csv"
+
 
 def run_comparative_backtests(
     prices: pd.DataFrame,
@@ -494,7 +477,6 @@ def run_comparative_backtests(
 
     return comp_df, scheme_summaries
 
-
 def format_comparative_scorecard(summaries: Dict[str, Dict[str, Any]]) -> str:
     """Sub-issue #180: Formats side-by-side institutional metrics across all 3 schemes."""
     ew = summaries["equal_weight"]["strategy_performance"]
@@ -520,7 +502,6 @@ def format_comparative_scorecard(summaries: Dict[str, Dict[str, Any]]) -> str:
     ]
     return "\n".join(lines)
 
-
 if __name__ == "__main__":
     if not PRICES_PATH.exists() or not MASK_PATH.exists():
         logging.error("Missing input artifacts: %s or %s", PRICES_PATH, MASK_PATH)
@@ -530,6 +511,3 @@ if __name__ == "__main__":
         results = run_backtest(prices_df, mask_df, export_results=True)
         summary_dict = build_summary_metrics_dict(results)
         print("\n" + format_scorecard_table(summary_dict) + "\n")
-
-        _, all_summaries = run_comparative_backtests(prices_df, mask_df, export_comparative=True)
-        print(format_comparative_scorecard(all_summaries) + "\n")
