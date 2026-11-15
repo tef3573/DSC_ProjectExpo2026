@@ -333,46 +333,80 @@ class ConvexPortfolioOptimizer:
             return 0.0
         return float(min(max_cap, 2.0 / n_active))
 
+    def _inverse_volatility_fallback(
+        self,
+        cov_matrix: np.ndarray,
+        equity_budget: float
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Sub-issue #175: Deterministic inverse-volatility fallback when QP solvers
+        are infeasible or fail to converge.
+        """
+        n = cov_matrix.shape[0]
+        variances = np.diag(cov_matrix)
+        vols = np.sqrt(np.maximum(variances, 0.0))
+        safe_vols = np.where(
+            np.isnan(vols) | (vols < REGULARIZATION_EPSILON),
+            REGULARIZATION_EPSILON,
+            vols
+        )
+        inv_vols = 1.0 / safe_vols
+        sum_inv = float(np.sum(inv_vols))
+        if sum_inv > 0.0 and np.isfinite(sum_inv):
+            weights = (inv_vols / sum_inv) * equity_budget
+        else:
+            weights = np.full(n, equity_budget / n, dtype=np.float64)
+        portfolio_var = float(weights.T @ cov_matrix @ weights)
+        return weights, portfolio_var
+
     def solve(
-            self,
-            cov_matrix: np.ndarray,
-            quality_scores: Optional[np.ndarray] = None,
-            lambda_tilt: float = 0.5,
-            equity_budget: float = 1.0,
-            upper_bound: Optional[float] = None
-        ) -> Tuple[np.ndarray, float]:
-            n = cov_matrix.shape[0]
-            if n == 0 or equity_budget <= 0.0:
-                return np.zeros(n), 0.0
-    
-            w, problem = self.construct_optimization_problem(
-                cov_matrix=cov_matrix,
-                quality_scores=quality_scores,
-                lambda_tilt=lambda_tilt,
-                equity_budget=equity_budget,
-                upper_bound=upper_bound
-            )
-            try:
-                problem.solve(solver=self.solver, verbose=self.verbose)
-                if problem.status in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE] and w.value is not None:
-                    weights = np.clip(w.value, 0.0, 1.0)
-                    if np.sum(weights) > 0:
-                        weights = weights / np.sum(weights) * equity_budget
-                    return weights, float(problem.value)
-            except Exception as e:
-                logging.warning(f"Solver {self.solver} failed: {e}. Falling back to OSQP.")
-                try:
-                    problem.solve(solver="OSQP", verbose=self.verbose)
-                    if problem.status in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE] and w.value is not None:
-                        weights = np.clip(w.value, 0.0, 1.0)
-                        if np.sum(weights) > 0:
-                            weights = weights / np.sum(weights) * equity_budget
-                        return weights, float(problem.value)
-                except Exception as e_osqp:
-                    logging.error(f"Fallback solver OSQP also failed: {e_osqp}.")
-            fallback_w = np.full(n, equity_budget / n)
-            fallback_var = float(fallback_w.T @ cov_matrix @ fallback_w)
-            return fallback_w, fallback_var
+        self,
+        cov_matrix: np.ndarray,
+        quality_scores: Optional[np.ndarray] = None,
+        lambda_tilt: float = 0.5,
+        equity_budget: float = 1.0,
+        upper_bound: Optional[float] = None,
+        use_dynamic_cap: bool = True
+    ) -> Tuple[np.ndarray, float]:
+        """
+        Sub-issue #175: Solves the formulated quadratic program with graceful fallback
+        to inverse-volatility weights if solvers fail or the constraints are infeasible.
+        """
+        n = cov_matrix.shape[0]
+        if n == 0 or equity_budget <= 0.0:
+            return np.zeros(n), 0.0
+        w, problem = self.construct_optimization_problem(
+            cov_matrix=cov_matrix,
+            quality_scores=quality_scores,
+            lambda_tilt=lambda_tilt,
+            equity_budget=equity_budget,
+            upper_bound=upper_bound,
+            use_dynamic_cap=use_dynamic_cap
+        )
+        # 1. Primary Solver: CLARABEL
+        try:
+            problem.solve(solver=self.solver, verbose=self.verbose)
+            if problem.status in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE] and w.value is not None:
+                weights = np.clip(w.value, 0.0, 1.0)
+                if np.sum(weights) > 0:
+                    weights = weights / np.sum(weights) * equity_budget
+                return weights, float(problem.value)
+            logging.warning(f"Solver {self.solver} returned status '{problem.status}'. Trying OSQP.")
+        except Exception as e:
+            logging.warning(f"Solver {self.solver} raised exception: {e}. Trying OSQP.")
+        # 2. Secondary Solver: OSQP
+        try:
+            problem.solve(solver="OSQP", verbose=self.verbose)
+            if problem.status in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE] and w.value is not None:
+                weights = np.clip(w.value, 0.0, 1.0)
+                if np.sum(weights) > 0:
+                    weights = weights / np.sum(weights) * equity_budget
+                return weights, float(problem.value)
+            logging.warning(f"Fallback solver OSQP returned status '{problem.status}'. Using inverse-vol fallback.")
+        except Exception as e_osqp:
+            logging.error(f"Fallback solver OSQP raised exception: {e_osqp}. Using inverse-vol fallback.")
+        # 3. Deterministic Fallback: Inverse-Volatility Allocation (#175)
+        return self._inverse_volatility_fallback(cov_matrix, equity_budget)
 
     
 if __name__ == "__main__":
