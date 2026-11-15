@@ -239,3 +239,9 @@ One-way portfolio turnover $\tau_t$ and institutional transaction friction $c_t$
 $$\tau_t = \frac{1}{2} \left( \sum_{i=1}^{M} \left|w_{t,i}^{\text{target}} - w_{t-1,i}^{\text{drift}}\right| + \left|w_{\text{cash}, t}^{\text{target}} - w_{\text{cash}, t-1}^{\text{drift}}\right| \right), \qquad c_t = \kappa \cdot \tau_t$$
 
 $$r_{\text{net}, t} = \left(\sum_{i=1}^{M} w_{t,i}^{\text{target}} r_{t,i} + w_{\text{cash}, t}^{\text{target}} r_{f,\text{daily}}\right) - c_t$$
+---
+
+## Milestone 3 Sign-Off & Artifact Verification (#193)
+* **Persisted Time Series:** `data/backtest_results.csv` (17 columns including `Convex_Quality_Net`, `Convex_Quality_Cumulative`, `Convex_Quality_Drawdown`) and `data/comparative_schemes.csv` (15 columns across `equal_weight`, `inverse_vol`, and `convex_quality`).
+* **Test Suite & Code Quality:** 60/60 unit, regression, and crisis stress-window integration tests passing (`unittest`); PEP 8 & type-hint refactoring verified (`pylint` 9.80/10).
+* **Phase 3 Status:** Completed and merged into `main`.
