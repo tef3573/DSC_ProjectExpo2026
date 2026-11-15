@@ -1,16 +1,20 @@
 """
+src/backtest.py
 Vectorized Portfolio Backtesting Engine with Institutional Friction and Artifact Export.
 - Sub-issues #104, #106, #107, #108, #110: Core simulation and friction mechanics.
 - Sub-issue #127: Export comprehensive daily time series to data/backtest_results.csv.
 - Sub-issue #129: Format console scorecard table for clean terminal output.
 - Sub-issue #135: Clean code refactor and pylint compliance.
 - Sub-issue #179: Integrate src/optimizer.py allocation schemes with src/backtest.py engine.
+- Sub-issue #180: Generate comparative performance curves for all 3 schemes.
+- Sub-issue #181: Sync monthly rebalancing calendar across optimizers.
 """
 from pathlib import Path
 from typing import Tuple, Dict, Any, Optional
 import logging
 import numpy as np
 import pandas as pd
+
 from src.metrics import (
     build_summary_metrics_dict,
     export_summary_metrics,
@@ -31,8 +35,9 @@ DATA_DIR = BASE_DIR / "data"
 PRICES_PATH = DATA_DIR / "prices_daily.csv"
 MASK_PATH = DATA_DIR / "universe_mask.csv"
 DEFAULT_EXPORT_PATH = DATA_DIR / "backtest_results.csv"
-VALID_ALLOCATION_SCHEMES = ("equal_weight", "inverse_vol", "convex_quality")
 COMPARATIVE_EXPORT_PATH = DATA_DIR / "comparative_schemes.csv"
+
+VALID_ALLOCATION_SCHEMES = ("equal_weight", "inverse_vol", "convex_quality")
 
 
 def compute_returns(prices: pd.DataFrame) -> pd.DataFrame:
@@ -47,6 +52,7 @@ def compute_equal_weights(
     """Computes dynamic equal target weights with cash-drag concentration defense."""
     n_t = universe_mask.sum(axis=1)
     stock_weights = pd.DataFrame(0.0, index=universe_mask.index, columns=universe_mask.columns)
+
     normal_mask = n_t >= min_diversification
     for col in universe_mask.columns:
         stock_weights.loc[normal_mask, col] = np.where(
@@ -54,6 +60,7 @@ def compute_equal_weights(
             1.0 / n_t.loc[normal_mask],
             0.0
         )
+
     defensive_mask = (n_t > 0) & (n_t < min_diversification)
     for col in universe_mask.columns:
         stock_weights.loc[defensive_mask, col] = np.where(
@@ -61,9 +68,78 @@ def compute_equal_weights(
             1.0 / min_diversification,
             0.0
         )
+
     equity_total = stock_weights.sum(axis=1)
     cash_weights = 1.0 - equity_total
     return stock_weights, cash_weights, n_t
+
+
+def get_rebalance_mask(
+    universe_mask: pd.DataFrame,
+    rebalance_monthly: bool = True
+) -> np.ndarray:
+    """
+    Sub-issue #181: Generates a synchronized boolean rebalancing schedule across all
+    optimizers. Triggers a rebalance on:
+      1. The initial session (t = 0)
+      2. The first trading session of each calendar month (if rebalance_monthly=True)
+      3. Any session where active universe membership changes (entry/exit event)
+    """
+    mask_arr = universe_mask.values.astype(bool)
+    t_len = mask_arr.shape[0]
+    dates = universe_mask.index
+
+    if not rebalance_monthly:
+        return np.ones(t_len, dtype=bool)
+
+    rebal_flags = np.zeros(t_len, dtype=bool)
+    for idx in range(t_len):
+        if idx == 0:
+            rebal_flags[idx] = True
+            continue
+        is_month_start = (
+            dates[idx].month != dates[idx - 1].month
+            or dates[idx].year != dates[idx - 1].year
+        )
+        membership_changed = not np.array_equal(mask_arr[idx], mask_arr[idx - 1])
+        rebal_flags[idx] = is_month_start or membership_changed
+
+    return rebal_flags
+
+
+def _apply_synchronized_rebalance_schedule(
+    raw_target_weights: np.ndarray,
+    prior_returns: np.ndarray,
+    active_mask: np.ndarray,
+    rebalance_flags: np.ndarray,
+    min_diversification: int = 3
+) -> np.ndarray:
+    """
+    Sub-issue #181: Holds target weights set on synchronized rebalance dates and drifts
+    intra-month allocations proportionally with realized prior-session returns.
+    """
+    t_len, n_assets = raw_target_weights.shape
+    scheduled_weights = np.zeros((t_len, n_assets), dtype=np.float64)
+    current_weights = np.zeros(n_assets, dtype=np.float64)
+
+    for idx in range(t_len):
+        n_active = int(np.sum(active_mask[idx]))
+        if n_active == 0:
+            current_weights = np.zeros(n_assets, dtype=np.float64)
+        elif rebalance_flags[idx]:
+            current_weights = raw_target_weights[idx].copy()
+        else:
+            grown = current_weights * (1.0 + prior_returns[idx])
+            total_eq = float(np.sum(grown))
+            target_budget = (n_active / min_diversification) if n_active < min_diversification else 1.0
+            if total_eq > 0.0:
+                current_weights = (grown / total_eq) * target_budget
+            else:
+                current_weights = raw_target_weights[idx].copy()
+
+        scheduled_weights[idx] = current_weights
+
+    return scheduled_weights
 
 
 def compute_target_weights(
@@ -76,9 +152,9 @@ def compute_target_weights(
     rebalance_monthly: bool = True
 ) -> Tuple[pd.DataFrame, pd.Series, pd.Series]:
     """
-    Sub-issue #179: Dispatches target weight generation across supported optimization
-    schemes ('equal_weight', 'inverse_vol', 'convex_quality') while enforcing
-    point-in-time causality and sparse-universe concentration defense.
+    Sub-issues #179 & #181: Dispatches target weight generation across supported
+    optimization schemes ('equal_weight', 'inverse_vol', 'convex_quality') using a
+    synchronized monthly + event-driven rebalancing calendar.
     """
     if allocation_scheme not in VALID_ALLOCATION_SCHEMES:
         raise ValueError(
@@ -87,7 +163,23 @@ def compute_target_weights(
         )
 
     if allocation_scheme == "equal_weight":
-        return compute_equal_weights(universe_mask, min_diversification=min_diversification)
+        ew_weights, ew_cash, n_t = compute_equal_weights(
+            universe_mask, min_diversification=min_diversification
+        )
+        if asset_returns is not None and rebalance_monthly:
+            tickers = list(universe_mask.columns)
+            prior_ret = asset_returns[tickers].loc[universe_mask.index].shift(1).fillna(0.0).values
+            rebal_flags = get_rebalance_mask(universe_mask, rebalance_monthly=True)
+            synced_arr = _apply_synchronized_rebalance_schedule(
+                raw_target_weights=ew_weights.values,
+                prior_returns=prior_ret,
+                active_mask=universe_mask.values.astype(bool),
+                rebalance_flags=rebal_flags,
+                min_diversification=min_diversification
+            )
+            ew_weights = pd.DataFrame(synced_arr, index=universe_mask.index, columns=tickers)
+            ew_cash = 1.0 - ew_weights.sum(axis=1)
+        return ew_weights, ew_cash, n_t
 
     if asset_returns is None:
         raise ValueError(f"asset_returns is required for allocation_scheme='{allocation_scheme}'.")
@@ -97,18 +189,27 @@ def compute_target_weights(
     prior_returns = aligned_returns.shift(1).fillna(0.0)
     mask_arr = universe_mask.values.astype(bool)
     n_t = universe_mask.sum(axis=1)
+    rebal_flags = get_rebalance_mask(universe_mask, rebalance_monthly=rebalance_monthly)
 
     if allocation_scheme == "inverse_vol":
-        weights_arr = compute_inverse_volatility_weights(
+        raw_iv_arr = compute_inverse_volatility_weights(
             returns=prior_returns,
             active_mask=mask_arr,
             lookback_window=MIN_OBSERVATIONS_REQUIRED,
             concentration_defense=True
         )
+        weights_arr = _apply_synchronized_rebalance_schedule(
+            raw_target_weights=raw_iv_arr,
+            prior_returns=prior_returns.values,
+            active_mask=mask_arr,
+            rebalance_flags=rebal_flags,
+            min_diversification=min_diversification
+        )
         stock_weights = pd.DataFrame(weights_arr, index=universe_mask.index, columns=tickers)
         cash_weights = 1.0 - stock_weights.sum(axis=1)
         return stock_weights, cash_weights, n_t
 
+    # allocation_scheme == "convex_quality"
     t_len, n_assets = mask_arr.shape
     weights_arr = np.zeros((t_len, n_assets), dtype=np.float64)
 
@@ -121,7 +222,6 @@ def compute_target_weights(
     )
 
     ret_values = prior_returns.values
-    dates = universe_mask.index
     current_weights = np.zeros(n_assets, dtype=np.float64)
 
     for idx in range(t_len):
@@ -134,17 +234,7 @@ def compute_target_weights(
             weights_arr[idx] = current_weights
             continue
 
-        is_first_session = idx == 0
-        is_month_start = (
-            not is_first_session
-            and (dates[idx].month != dates[idx - 1].month or dates[idx].year != dates[idx - 1].year)
-        )
-        membership_changed = (
-            not is_first_session
-            and not np.array_equal(active_row, mask_arr[idx - 1])
-        )
-
-        if not rebalance_monthly or is_first_session or is_month_start or membership_changed:
+        if rebal_flags[idx]:
             equity_budget = (1.0 / min_diversification) if n_active < min_diversification else 1.0
             start_idx = max(0, idx - lookback_window + 1)
             window_slice = prior_returns.iloc[start_idx:idx + 1, active_indices]
@@ -167,7 +257,7 @@ def compute_target_weights(
             day_r = ret_values[idx]
             grown = current_weights * (1.0 + day_r)
             total_eq = float(np.sum(grown))
-            target_budget = (1.0 / min_diversification) if n_active < min_diversification else 1.0
+            target_budget = (n_active / min_diversification) if n_active < min_diversification else 1.0
             if total_eq > 0.0:
                 current_weights = (grown / total_eq) * target_budget
 
@@ -259,6 +349,7 @@ def format_scorecard_table(summary: Dict[str, Any]) -> str:
     ]
     return "\n".join(lines)
 
+
 def run_backtest(
     prices: pd.DataFrame,
     mask: pd.DataFrame,
@@ -341,8 +432,6 @@ def run_backtest(
         export_summary_metrics(summary)
 
     return df_out
-
-    COMPARATIVE_EXPORT_PATH = DATA_DIR / "comparative_schemes.csv"
 
 
 def run_comparative_backtests(
@@ -431,6 +520,7 @@ def format_comparative_scorecard(summaries: Dict[str, Dict[str, Any]]) -> str:
     ]
     return "\n".join(lines)
 
+
 if __name__ == "__main__":
     if not PRICES_PATH.exists() or not MASK_PATH.exists():
         logging.error("Missing input artifacts: %s or %s", PRICES_PATH, MASK_PATH)
@@ -440,3 +530,6 @@ if __name__ == "__main__":
         results = run_backtest(prices_df, mask_df, export_results=True)
         summary_dict = build_summary_metrics_dict(results)
         print("\n" + format_scorecard_table(summary_dict) + "\n")
+
+        _, all_summaries = run_comparative_backtests(prices_df, mask_df, export_comparative=True)
+        print(format_comparative_scorecard(all_summaries) + "\n")
