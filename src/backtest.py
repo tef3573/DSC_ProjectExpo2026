@@ -32,6 +32,7 @@ PRICES_PATH = DATA_DIR / "prices_daily.csv"
 MASK_PATH = DATA_DIR / "universe_mask.csv"
 DEFAULT_EXPORT_PATH = DATA_DIR / "backtest_results.csv"
 VALID_ALLOCATION_SCHEMES = ("equal_weight", "inverse_vol", "convex_quality")
+COMPARATIVE_EXPORT_PATH = DATA_DIR / "comparative_schemes.csv"
 
 
 def compute_returns(prices: pd.DataFrame) -> pd.DataFrame:
@@ -258,7 +259,6 @@ def format_scorecard_table(summary: Dict[str, Any]) -> str:
     ]
     return "\n".join(lines)
 
-
 def run_backtest(
     prices: pd.DataFrame,
     mask: pd.DataFrame,
@@ -342,6 +342,94 @@ def run_backtest(
 
     return df_out
 
+    COMPARATIVE_EXPORT_PATH = DATA_DIR / "comparative_schemes.csv"
+
+
+def run_comparative_backtests(
+    prices: pd.DataFrame,
+    mask: pd.DataFrame,
+    fee_bps: float = 10.0,
+    rf_annual: float = 0.015,
+    min_diversification: int = 3,
+    lambda_tilt: float = 0.5,
+    rebalance_monthly: bool = True,
+    export_comparative: bool = True,
+    export_path: Path = COMPARATIVE_EXPORT_PATH
+) -> Tuple[pd.DataFrame, Dict[str, Dict[str, Any]]]:
+    """
+    Sub-issue #180: Executes backtests across all 3 allocation schemes
+    ('equal_weight', 'inverse_vol', 'convex_quality') and generates comparative
+    performance curves and summary scorecards.
+    """
+    scheme_results: Dict[str, pd.DataFrame] = {}
+    scheme_summaries: Dict[str, Dict[str, Any]] = {}
+
+    for scheme in VALID_ALLOCATION_SCHEMES:
+        res_df = run_backtest(
+            prices=prices,
+            mask=mask,
+            fee_bps=fee_bps,
+            rf_annual=rf_annual,
+            min_diversification=min_diversification,
+            export_results=(scheme == "equal_weight"),
+            allocation_scheme=scheme,
+            lambda_tilt=lambda_tilt,
+            rebalance_monthly=rebalance_monthly
+        )
+        scheme_results[scheme] = res_df
+        scheme_summaries[scheme] = build_summary_metrics_dict(res_df, rf_annual=rf_annual)
+
+    base_df = scheme_results["equal_weight"]
+    comp_df = pd.DataFrame({
+        "Equal_Weight_Net": scheme_results["equal_weight"]["Black_CEO_Net"],
+        "Equal_Weight_Cumulative": scheme_results["equal_weight"]["Black_CEO_Cumulative"],
+        "Equal_Weight_Drawdown": scheme_results["equal_weight"]["Strategy_Drawdown"],
+        "Equal_Weight_Turnover": scheme_results["equal_weight"]["One_Way_Turnover"],
+        "Inverse_Vol_Net": scheme_results["inverse_vol"]["Black_CEO_Net"],
+        "Inverse_Vol_Cumulative": scheme_results["inverse_vol"]["Black_CEO_Cumulative"],
+        "Inverse_Vol_Drawdown": scheme_results["inverse_vol"]["Strategy_Drawdown"],
+        "Inverse_Vol_Turnover": scheme_results["inverse_vol"]["One_Way_Turnover"],
+        "Convex_Quality_Net": scheme_results["convex_quality"]["Black_CEO_Net"],
+        "Convex_Quality_Cumulative": scheme_results["convex_quality"]["Black_CEO_Cumulative"],
+        "Convex_Quality_Drawdown": scheme_results["convex_quality"]["Strategy_Drawdown"],
+        "Convex_Quality_Turnover": scheme_results["convex_quality"]["One_Way_Turnover"],
+        "SPY_Cumulative": base_df["SPY_Cumulative"],
+        "RSP_Cumulative": base_df["RSP_Cumulative"],
+        "Active_Constituents_Nt": base_df["Active_Constituents_Nt"],
+    }, index=base_df.index)
+
+    if export_comparative:
+        export_path.parent.mkdir(parents=True, exist_ok=True)
+        comp_df.to_csv(export_path, index=True)
+        logging.info("Sub-issue #180: Exported 3-scheme comparative curves to %s", export_path)
+
+    return comp_df, scheme_summaries
+
+
+def format_comparative_scorecard(summaries: Dict[str, Dict[str, Any]]) -> str:
+    """Sub-issue #180: Formats side-by-side institutional metrics across all 3 schemes."""
+    ew = summaries["equal_weight"]["strategy_performance"]
+    iv = summaries["inverse_vol"]["strategy_performance"]
+    cq = summaries["convex_quality"]["strategy_performance"]
+    spy = summaries["equal_weight"]["benchmark_spy_full_horizon"]
+
+    width = 92
+    lines = [
+        "=" * width,
+        f"{'BLACK CEO PORTFOLIO: COMPARATIVE ALLOCATION SCHEME SCORECARD':^{width}}",
+        "=" * width,
+        f"{'Metric':<28} {'Equal Weight':>14} {'Inverse-Vol':>14} {'Convex Quality':>16} {'SPY':>14}",
+        "-" * width,
+        f"{'CAGR (Net)':<28} {ew['cagr_net']:>13.2%} {iv['cagr_net']:>13.2%} {cq['cagr_net']:>15.2%} {spy['benchmark_cagr']:>13.2%}",
+        f"{'Annualized Volatility':<28} {ew['annualized_volatility']:>13.2%} {iv['annualized_volatility']:>13.2%} {cq['annualized_volatility']:>15.2%} {spy['benchmark_volatility']:>13.2%}",
+        f"{'Sharpe Ratio (Rf=1.5%)':<28} {ew['sharpe_ratio']:>14.2f} {iv['sharpe_ratio']:>14.2f} {cq['sharpe_ratio']:>16.2f} {spy['benchmark_sharpe']:>14.2f}",
+        f"{'Sortino Ratio':<28} {ew['sortino_ratio']:>14.2f} {iv['sortino_ratio']:>14.2f} {cq['sortino_ratio']:>16.2f} {'N/A':>14}",
+        f"{'Maximum Drawdown (MDD)':<28} {ew['max_drawdown']:>13.2%} {iv['max_drawdown']:>13.2%} {cq['max_drawdown']:>15.2%} {spy['benchmark_mdd']:>13.2%}",
+        f"{'Cumulative Wealth Multiple':<28} {ew['cumulative_multiple_net']:>13.2f}x {iv['cumulative_multiple_net']:>13.2f}x {cq['cumulative_multiple_net']:>15.2f}x {'N/A':>14}",
+        f"{'Annualized Turnover':<28} {ew['annualized_turnover']:>13.2%} {iv['annualized_turnover']:>13.2%} {cq['annualized_turnover']:>15.2%} {'N/A':>14}",
+        "=" * width,
+    ]
+    return "\n".join(lines)
 
 if __name__ == "__main__":
     if not PRICES_PATH.exists() or not MASK_PATH.exists():
