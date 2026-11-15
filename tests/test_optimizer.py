@@ -355,5 +355,70 @@ class TestConcentrationBoundaryConstraints(unittest.TestCase):
         self.assertGreater(w1[0], w1[4])
         self.assertGreater(w2[4], w2[0])
 
+
+
+class TestHistoricalRebalancingRegression(unittest.TestCase):
+    """Sub-issue #190: Regression suite across all historical rebalancing dates (2000-2026)."""
+
+    def test_all_historical_rebalance_dates_satisfy_constraints(self):
+        """Verify QP solver feasibility, budget equality, and 35% cap on every historical rebalance."""
+        from src.backtest import PRICES_PATH, MASK_PATH, compute_returns, get_rebalance_mask
+        from src.optimizer import (
+            CovarianceEstimator,
+            ConvexPortfolioOptimizer,
+            compute_fundamental_quality_scores,
+            DEFAULT_LOOKBACK_DAYS,
+        )
+
+        self.assertTrue(PRICES_PATH.exists(), f"Missing {PRICES_PATH}")
+        self.assertTrue(MASK_PATH.exists(), f"Missing {MASK_PATH}")
+
+        prices_df = pd.read_csv(PRICES_PATH, index_col=0, parse_dates=True)
+        mask_df = pd.read_csv(MASK_PATH, index_col=0, parse_dates=True).astype(bool)
+        common_idx = prices_df.index.intersection(mask_df.index)
+        prices_df = prices_df.loc[common_idx]
+        mask_df = mask_df.loc[common_idx]
+
+        tickers = list(mask_df.columns)
+        prior_returns = compute_returns(prices_df)[tickers].shift(1).fillna(0.0)
+        mask_arr = mask_df.values
+        rebal_indices = np.where(get_rebalance_mask(mask_df, rebalance_monthly=True))[0]
+        self.assertGreater(len(rebal_indices), 250)
+
+        cov_estimator = CovarianceEstimator(lookback_window=DEFAULT_LOOKBACK_DAYS)
+        qp_optimizer = ConvexPortfolioOptimizer()
+        quality_matrix = compute_fundamental_quality_scores(
+            returns=prior_returns,
+            active_mask=mask_arr,
+            lookback_window=DEFAULT_LOOKBACK_DAYS,
+        )
+
+        for idx in rebal_indices:
+            active_cols = np.where(mask_arr[idx])[0]
+            n_active = len(active_cols)
+            if n_active == 0:
+                continue
+
+            expected_budget = (1.0 / 3.0) if n_active < 3 else 1.0
+            start_idx = max(0, idx - DEFAULT_LOOKBACK_DAYS + 1)
+            window_slice = prior_returns.iloc[start_idx:idx + 1, active_cols]
+
+            if len(window_slice) >= 2 and n_active >= 2:
+                cov_sub, _ = cov_estimator.estimate(window_slice)
+                w_sub, _ = qp_optimizer.solve(
+                    cov_matrix=cov_sub,
+                    quality_scores=quality_matrix[idx, active_cols],
+                    lambda_tilt=0.5,
+                    equity_budget=expected_budget,
+                )
+            else:
+                w_sub = np.full(n_active, expected_budget / n_active, dtype=np.float64)
+
+            self.assertTrue(np.all(np.isfinite(w_sub)), f"Non-finite weights at idx={idx}")
+            self.assertTrue(np.all(w_sub >= -1e-8), f"Negative weight at idx={idx}")
+            self.assertAlmostEqual(float(np.sum(w_sub)), expected_budget, places=5)
+            self.assertLessEqual(float(np.max(w_sub)), 0.35 + 1e-5)
+
+
 if __name__ == "__main__":
     unittest.main()
