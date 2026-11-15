@@ -285,8 +285,14 @@ class ConvexPortfolioOptimizer:
         quality_scores: Optional[np.ndarray] = None,
         lambda_tilt: float = 0.5,
         equity_budget: float = 1.0,
-        upper_bound: Optional[float] = None
+        upper_bound: Optional[float] = None,
+        use_dynamic_cap: bool = True
     ) -> Tuple[cp.Variable, cp.Problem]:
+        """
+        Sub-issues #162, #163, #164, #169, #174:
+        Constructs convex optimization problem with dynamic concentration upper bound
+        w <= min(0.35, 2 / N_t).
+        """
         n = cov_matrix.shape[0]
         w = cp.Variable(n, name="weights")
 
@@ -306,54 +312,69 @@ class ConvexPortfolioOptimizer:
             cp.sum(w) == equity_budget
         ]
 
-        if upper_bound is not None:
-            constraints.append(w <= upper_bound)
+        # Sub-issue #174: Apply dynamic upper weight cap min(0.35, 2 / N_t)
+        effective_upper = upper_bound
+        if effective_upper is None and use_dynamic_cap and n > 0:
+            effective_upper = self.compute_dynamic_upper_cap(n_active=n)
+
+        if effective_upper is not None:
+            constraints.append(w <= effective_upper)
 
         problem = cp.Problem(objective, constraints)
         return w, problem
 
+    @staticmethod
+    def compute_dynamic_upper_cap(n_active: int, max_cap: float = 0.35) -> float:
+        """
+        Sub-issue #174: Computes the dynamic single-asset upper weight cap:
+            w_max = min(0.35, 2 / N_t)
+        """
+        if n_active <= 0:
+            return 0.0
+        return float(min(max_cap, 2.0 / n_active))
+
     def solve(
-        self,
-        cov_matrix: np.ndarray,
-        quality_scores: Optional[np.ndarray] = None,
-        lambda_tilt: float = 0.5,
-        equity_budget: float = 1.0,
-        upper_bound: Optional[float] = None
-    ) -> Tuple[np.ndarray, float]:
-        n = cov_matrix.shape[0]
-        if n == 0 or equity_budget <= 0.0:
-            return np.zeros(n), 0.0
-
-        w, problem = self.construct_optimization_problem(
-            cov_matrix=cov_matrix,
-            quality_scores=quality_scores,
-            lambda_tilt=lambda_tilt,
-            equity_budget=equity_budget,
-            upper_bound=upper_bound
-        )
-
-        try:
-            problem.solve(solver=self.solver, verbose=self.verbose)
-            if problem.status in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE] and w.value is not None:
-                weights = np.clip(w.value, 0.0, 1.0)
-                if np.sum(weights) > 0:
-                    weights = weights / np.sum(weights) * equity_budget
-                return weights, float(problem.value)
-        except Exception as e:
-            logging.warning(f"Solver {self.solver} failed: {e}. Falling back to OSQP.")
+            self,
+            cov_matrix: np.ndarray,
+            quality_scores: Optional[np.ndarray] = None,
+            lambda_tilt: float = 0.5,
+            equity_budget: float = 1.0,
+            upper_bound: Optional[float] = None
+        ) -> Tuple[np.ndarray, float]:
+            n = cov_matrix.shape[0]
+            if n == 0 or equity_budget <= 0.0:
+                return np.zeros(n), 0.0
+    
+            w, problem = self.construct_optimization_problem(
+                cov_matrix=cov_matrix,
+                quality_scores=quality_scores,
+                lambda_tilt=lambda_tilt,
+                equity_budget=equity_budget,
+                upper_bound=upper_bound
+            )
             try:
-                problem.solve(solver="OSQP", verbose=self.verbose)
+                problem.solve(solver=self.solver, verbose=self.verbose)
                 if problem.status in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE] and w.value is not None:
                     weights = np.clip(w.value, 0.0, 1.0)
                     if np.sum(weights) > 0:
                         weights = weights / np.sum(weights) * equity_budget
                     return weights, float(problem.value)
-            except Exception as e_osqp:
-                logging.error(f"Fallback solver OSQP also failed: {e_osqp}.")
+            except Exception as e:
+                logging.warning(f"Solver {self.solver} failed: {e}. Falling back to OSQP.")
+                try:
+                    problem.solve(solver="OSQP", verbose=self.verbose)
+                    if problem.status in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE] and w.value is not None:
+                        weights = np.clip(w.value, 0.0, 1.0)
+                        if np.sum(weights) > 0:
+                            weights = weights / np.sum(weights) * equity_budget
+                        return weights, float(problem.value)
+                except Exception as e_osqp:
+                    logging.error(f"Fallback solver OSQP also failed: {e_osqp}.")
+            fallback_w = np.full(n, equity_budget / n)
+            fallback_var = float(fallback_w.T @ cov_matrix @ fallback_w)
+            return fallback_w, fallback_var
 
-        fallback_w = np.full(n, equity_budget / n)
-        fallback_var = float(fallback_w.T @ cov_matrix @ fallback_w)
-        return fallback_w, fallback_var
+    
 if __name__ == "__main__":
     estimator = CovarianceEstimator()
     print("src/optimizer.py initialized with Ledoit-Wolf shrinkage and PSD conditioning.")

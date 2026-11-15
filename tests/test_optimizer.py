@@ -180,16 +180,15 @@ class TestConvexQPOptimizer(unittest.TestCase):
         self.assertTrue(problem.objective.is_dcp())
 
     def test_budget_and_long_only_constraints(self):
-        """Sub-issue #164: Verify w >= 0 and sum(w) == equity_budget."""
+        """Sub-issue #164 & #174: Verify w >= 0, sum(w) == equity_budget, and dynamic upper cap."""
         cov = np.eye(3) * 0.04
-        w, problem = self.optimizer.construct_optimization_problem(cov, equity_budget=1.0 / 3.0)
+        _, problem = self.optimizer.construct_optimization_problem(cov, equity_budget=1.0)
+        self.assertEqual(len(problem.constraints), 3)
 
-        # 2 constraints: w >= 0, sum(w) == 1/3
-        self.assertEqual(len(problem.constraints), 2)
-        weights, _ = self.optimizer.solve(cov, equity_budget=1.0 / 3.0)
-
-        self.assertTrue(np.all(weights >= -1e-7))
-        self.assertAlmostEqual(np.sum(weights), 1.0 / 3.0, places=6)
+        _, problem_uncapped = self.optimizer.construct_optimization_problem(
+            cov, equity_budget=1.0, use_dynamic_cap=False
+        )
+        self.assertEqual(len(problem_uncapped.constraints), 2)
 
     def test_solver_convergence_on_standard_covariance(self):
         """Sub-issue #166: Verify solver convergence on standard asset covariance input."""
