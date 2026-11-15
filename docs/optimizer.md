@@ -192,3 +192,50 @@ This preserves risk-parity proportionality and budget compliance without halting
 
 ### 6.3 Parameterized Problem Caching & Cholesky Reformulation (#176)
 To eliminate repeated symbolic AST canonicalization across thousands of rolling rebalance dates, `ConvexPortfolioOptimizer` caches compiled `cvxpy` problem graphs keyed by `(n_assets, has_tilt, has_upper_bound)`. The quadratic variance form $w^{\top}\Sigma^{*}w$ is expressed via upper Cholesky factorization ($\Sigma^{*} = L^{\top}L$) as $\|L w\|_2^2$ (`cp.sum_squares(chol_param @ w)`), allowing rolling updates to mutate `cp.Parameter` values in place with `warm_start=True`.
+
+---
+
+## 7. Complete End-to-End Mathematical Specification (#184)
+
+### 7.1 Rolling Point-in-Time Return Window & Causality
+At trading session $t$, let $\mathcal{A}_t = \{i \in \{1, \dots, M\} : \text{mask}_{t,i} = 1\}$ denote the active Black CEO constituent set of cardinality $N_t = |\mathcal{A}_t|$, lagged by $t+1$ execution days. All statistical estimates use strictly historical arithmetic returns through session $t - 1$ over trailing lookback window $W = 63$ trading days:
+
+$$R_{t-1}^{(W)} = \begin{bmatrix} r_{t-W, \mathcal{A}_t} \\ \vdots \\ r_{t-1, \mathcal{A}_t} \end{bmatrix} \in \mathbb{R}^{W \times N_t}$$
+
+### 7.2 Ledoit-Wolf Shrinkage & Spectral PSD Conditioning
+Let $\hat{\Sigma}_t = \frac{1}{W - 1} (R_{t-1}^{(W)} - \bar{R})^\top (R_{t-1}^{(W)} - \bar{R})$ be the sample covariance matrix and $\mu_t = \frac{\text{tr}(\hat{\Sigma}_t)}{N_t}$ be the isotropic target variance scale. The shrunk covariance matrix is:
+
+$$\Sigma_{\text{LW}, t} = (1 - \delta_t)\hat{\Sigma}_t + \delta_t \mu_t I_{N_t}, \qquad \delta_t \in [0, 1]$$
+
+To guarantee strict positive definiteness ($\Sigma_t^* \succ 0$) under rank-deficient or near-collinear regimes, spectral decomposition $\Sigma_{\text{LW}, t} = Q \Lambda Q^\top$ is floored at $\epsilon = 10^{-6}$:
+
+$$\Sigma_t^* = Q \, \text{diag}\!\left(\max(\lambda_1, \epsilon), \dots, \max(\lambda_{N_t}, \epsilon)\right) Q^\top$$
+
+### 7.3 Cross-Sectional Fundamental Quality Score ($q_t$)
+For each active constituent $i \in \mathcal{A}_t$, raw momentum-to-downside-risk quality $s_{t,i}$ is computed from trailing mean drift $\bar{r}_{t,i}$ and downside semi-deviation $\sigma^-_{t,i} = \sqrt{\frac{1}{W}\sum_{k=1}^{W} \min(r_{t-k,i}, 0)^2}$:
+
+$$s_{t,i} = \frac{\bar{r}_{t,i}}{\max(\sigma^-_{t,i}, \, \epsilon_{\text{vol}})}, \qquad \epsilon_{\text{vol}} = 10^{-4}$$
+
+Scores are cross-sectionally standardized across active peers $\mathcal{A}_t$ to zero mean and unit variance:
+
+$$q_{t,i} = \frac{s_{t,i} - \mu_{s,t}}{\max(\sigma_{s,t}, \, 10^{-8})}, \qquad i \in \mathcal{A}_t$$
+
+### 7.4 Convex Quadratic Program & Cholesky Reformulation
+Let $B_t = \min(1.0, \, N_t / 3)$ denote the sparse-universe equity budget and $w_{\max}(N_t) = \min(0.35, \, 2 / N_t)$ denote the dynamic single-asset ceiling. Factoring $\Sigma_t^* = L_t^\top L_t$ via upper Cholesky decomposition, the optimizer solves:
+
+$$\begin{aligned}
+\min_{w \in \mathbb{R}^{N_t}} \quad & \frac{1}{2} \|L_t w\|_2^2 - \lambda_{\text{tilt}} \, q_t^\top w \\
+\text{subject to} \quad & \mathbf{1}^\top w = B_t \\
+& 0 \le w_i \le w_{\max}(N_t), \qquad \forall i \in \{1, \dots, N_t\}
+\end{aligned}$$
+
+with cash allocation $w_{\text{cash}, t} = 1 - B_t$ earning the daily risk-free rate $r_{f,\text{daily}} = (1 + r_{f,\text{annual}})^{1/252} - 1$.
+
+### 7.5 Synchronized Rebalancing Calendar & Friction Accounting
+Target weights $w_t^{\text{target}}$ are recomputed on the synchronized rebalance indicator $\mathbb{I}_{\text{rebal}}(t) \in \{0, 1\}$ (initial session $t=0$, first trading day of each calendar month, or any universe entry/exit event). Between rebalances ($\mathbb{I}_{\text{rebal}}(t) = 0$), holdings drift proportionally with realized returns while preserving $B_t$.
+
+One-way portfolio turnover $\tau_t$ and institutional transaction friction $c_t$ (at $\kappa = 10\text{ bps} = 0.0010$) are deducted daily:
+
+$$\tau_t = \frac{1}{2} \left( \sum_{i=1}^{M} \left|w_{t,i}^{\text{target}} - w_{t-1,i}^{\text{drift}}\right| + \left|w_{\text{cash}, t}^{\text{target}} - w_{\text{cash}, t-1}^{\text{drift}}\right| \right), \qquad c_t = \kappa \cdot \tau_t$$
+
+$$r_{\text{net}, t} = \left(\sum_{i=1}^{M} w_{t,i}^{\text{target}} r_{t,i} + w_{\text{cash}, t}^{\text{target}} r_{f,\text{daily}}\right) - c_t$$

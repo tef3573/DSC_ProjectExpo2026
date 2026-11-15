@@ -203,5 +203,88 @@ class TestBacktestEngine(unittest.TestCase):
         self.assertFalse(res["Black_CEO_Cumulative"].isna().any())
 
 
+
+
+class TestRebalancingIntegrationAndFriction(unittest.TestCase):
+    """Sub-issues #179, #180, #181, #183: Test 3-scheme integration, calendar sync, and friction bounds."""
+
+    def _build_synthetic_market(self, n_days: int = 300, n_assets: int = 5):
+        rng = np.random.default_rng(42)
+        dates = pd.bdate_range("2020-01-02", periods=n_days)
+        tickers = [f"ASSET_{i}" for i in range(n_assets)]
+        vols = np.linspace(0.008, 0.025, n_assets)
+        drifts = np.linspace(0.0005, 0.0001, n_assets)
+        rets = rng.normal(loc=drifts, scale=vols, size=(n_days, n_assets))
+        prices_data = 100.0 * np.exp(np.cumsum(rets, axis=0))
+        prices = pd.DataFrame(prices_data, index=dates, columns=tickers)
+        prices["SPY"] = 300.0 * np.exp(np.cumsum(rng.normal(0.0003, 0.01, size=n_days)))
+        prices["RSP"] = 120.0 * np.exp(np.cumsum(rng.normal(0.00035, 0.011, size=n_days)))
+        mask = pd.DataFrame(True, index=dates, columns=tickers)
+        return prices, mask
+
+    def test_comparative_backtests_all_three_schemes(self):
+        """Sub-issues #179 & #180: Verify comparative runner outputs valid curves for all 3 schemes."""
+        from src.backtest import run_comparative_backtests
+        prices, mask = self._build_synthetic_market(n_days=260, n_assets=5)
+        comp_df, summaries = run_comparative_backtests(
+            prices=prices,
+            mask=mask,
+            export_comparative=False
+        )
+        self.assertEqual(set(summaries.keys()), {"equal_weight", "inverse_vol", "convex_quality"})
+        for col in ["Equal_Weight_Cumulative", "Inverse_Vol_Cumulative", "Convex_Quality_Cumulative"]:
+            self.assertIn(col, comp_df.columns)
+            self.assertTrue(np.all(np.isfinite(comp_df[col])))
+            self.assertGreater(comp_df[col].iloc[-1], 0.0)
+
+    def test_synchronized_monthly_rebalance_schedule_reduces_turnover(self):
+        """Sub-issue #181: Monthly calendar synchronization eliminates intra-month churn."""
+        from src.backtest import get_rebalance_mask
+        prices, mask = self._build_synthetic_market(n_days=260, n_assets=5)
+        rebal_flags = get_rebalance_mask(mask, rebalance_monthly=True)
+        # ~12 monthly rebalances in 260 business days (far fewer than 260 daily rebalances)
+        self.assertTrue(rebal_flags[0])
+        self.assertLessEqual(int(np.sum(rebal_flags)), 15)
+
+        res_monthly = run_backtest(
+            prices, mask, export_results=False,
+            allocation_scheme="convex_quality", rebalance_monthly=True
+        )
+        res_daily = run_backtest(
+            prices, mask, export_results=False,
+            allocation_scheme="convex_quality", rebalance_monthly=False
+        )
+        self.assertLess(
+            res_monthly["One_Way_Turnover"].sum(),
+            res_daily["One_Way_Turnover"].sum()
+        )
+
+    def test_optimized_portfolio_turnover_satisfies_friction_constraints(self):
+        """Sub-issue #183: Verify convex_quality turnover and transaction costs stay bounded."""
+        prices, mask = self._build_synthetic_market(n_days=300, n_assets=6)
+        fee_bps = 10.0
+        res = run_backtest(
+            prices=prices,
+            mask=mask,
+            fee_bps=fee_bps,
+            export_results=False,
+            allocation_scheme="convex_quality",
+            rebalance_monthly=True
+        )
+        # 1. One-way turnover per session must never exceed 100% (1.0)
+        self.assertTrue((res["One_Way_Turnover"] >= 0.0).all())
+        self.assertTrue((res["One_Way_Turnover"] <= 1.0 + 1e-8).all())
+        self.assertEqual(res["One_Way_Turnover"].iloc[0], 0.0)
+
+        # 2. Transaction costs must equal exact 10 bps * turnover and keep net <= gross
+        expected_costs = res["One_Way_Turnover"] * (fee_bps / 10000.0)
+        self.assertTrue(np.allclose(res["Transaction_Costs"], expected_costs, atol=1e-10))
+        self.assertTrue((res["Black_CEO_Net"] <= res["Black_CEO_Gross"] + 1e-12).all())
+
+        # 3. Annualized turnover under monthly rebalancing must stay <= 600% (<= 60 bps annual drag)
+        annualized_turnover = res["One_Way_Turnover"].mean() * 252.0
+        self.assertLess(annualized_turnover, 6.0)
+
+
 if __name__ == "__main__":
     unittest.main()
