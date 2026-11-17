@@ -233,27 +233,10 @@ def build_ff5_regression_matrices(
     factor_columns: Tuple[str, ...] = FF5_FACTOR_COLUMNS,
 ) -> Tuple[FloatArray, FloatArray, pd.DatetimeIndex]:
     """
-    Formulates the Fama-French 5-factor multi-factor excess return regression equation:
-        R_{p,t}^e = alpha + beta_MKT*(Mkt-RF)_t + beta_SMB*SMB_t + beta_HML*HML_t
-                    + beta_RMW*RMW_t + beta_CMA*CMA_t + eps_t
+    Formulates the Fama-French 5-factor multi-factor excess return regression equation
 
     Sub-issue #209: Aligns strategy net returns with FF5 factors, computes dependent
     excess return vector y = r_net - RF, and constructs design matrix X = [1, F].
-
-    Args:
-        strategy_returns: Daily net portfolio return series indexed by trading date.
-        factors_df: Decimal FF5 factor DataFrame containing Mkt-RF, SMB, HML, RMW, CMA, RF.
-        factor_columns: Ordered tuple of factor regressor column names.
-
-    Returns:
-        Tuple (y, design_x, aligned_index) where:
-            y: 1D float64 array of daily excess returns of shape (T,).
-            design_x: 2D float64 design matrix of shape (T, 1 + len(factor_columns)) with
-                leading unit intercept column.
-            aligned_index: Matching DatetimeIndex of length T.
-
-    Raises:
-        ValueError: If fewer than (K + 2) finite observations exist or non-finite values appear.
     """
     excess_returns, aligned_factors = align_strategy_and_factors(
         strategy_returns=strategy_returns,
@@ -262,88 +245,17 @@ def build_ff5_regression_matrices(
 
     y_vec: FloatArray = excess_returns.to_numpy(dtype=np.float64)
     factor_mat: FloatArray = aligned_factors[list(factor_columns)].to_numpy(dtype=np.float64)
-
     if not (np.all(np.isfinite(y_vec)) and np.all(np.isfinite(factor_mat))):
         raise ValueError("Non-finite observations detected in excess returns or FF5 factors.")
-
     n_obs: int = y_vec.shape[0]
     n_params: int = 1 + factor_mat.shape[1]
     if n_obs <= n_params:
         raise ValueError(
             f"Insufficient observations (T={n_obs}) to estimate {n_params} FF5 parameters."
         )
-
     intercept_col: FloatArray = np.ones((n_obs, 1), dtype=np.float64)
     design_x: FloatArray = np.hstack([intercept_col, factor_mat])
-
     return y_vec, design_x, excess_returns.index
-
-
-
-def recommend_newey_west_lags(n_observations: int) -> int:
-    """
-    Computes Newey-West (1994) automatic plug-in lag bandwidth floor(4 * (T / 100)^(2/9)).
-
-    Args:
-        n_observations: Number of aligned daily return sessions T.
-
-    Returns:
-        Recommended integer truncation lag L >= 1.
-    """
-    if n_observations <= 1:
-        return 1
-    return max(1, int(np.floor(4.0 * ((n_observations / 100.0) ** (2.0 / 9.0)))))
-
-
-def compute_newey_west_hac_covariance(
-    design_x: FloatArray,
-    residuals: FloatArray,
-    max_lags: int = 5,
-    small_sample_adjust: bool = True,
-) -> FloatArray:
-    """
-    Computes the Newey-West (1987) Heteroskedasticity and Autocorrelation Consistent (HAC)
-    parameter covariance matrix using Bartlett kernel weights w_l = 1 - l / (L + 1).
-
-    Sub-issue #211: Accounts for serial correlation and volatility clustering in daily
-    portfolio excess return residuals when computing t-statistics and p-values.
-
-    Args:
-        design_x: 2D regressor matrix X of shape (T, K).
-        residuals: 1D OLS residual vector e of shape (T,).
-        max_lags: Truncation lag L >= 0 (L=0 reduces to White HC0/HC1 covariance).
-        small_sample_adjust: Applies finite-sample degrees-of-freedom factor T / (T - K).
-
-    Returns:
-        Symmetric positive-definite HAC covariance matrix of shape (K, K).
-
-    Raises:
-        ValueError: If max_lags is negative or dimensions of design_x and residuals mismatch.
-    """
-    if max_lags < 0:
-        raise ValueError(f"max_lags must be non-negative, got {max_lags}.")
-
-    n_obs, n_params = design_x.shape
-    if residuals.shape[0] != n_obs:
-        raise ValueError("Row count of design_x must match length of residuals.")
-
-    # Score matrix U_t = e_t * x_t of shape (T, K)
-    scores: FloatArray = design_x * residuals[:, np.newaxis]
-    meat_s: FloatArray = scores.T @ scores
-
-    effective_lags: int = min(max_lags, n_obs - 1)
-    for lag in range(1, effective_lags + 1):
-        bartlett_weight: float = 1.0 - (lag / (effective_lags + 1.0))
-        gamma_lag: FloatArray = scores[lag:].T @ scores[:-lag]
-        meat_s = meat_s + bartlett_weight * (gamma_lag + gamma_lag.T)
-
-    xtx_inv: FloatArray = np.linalg.inv(design_x.T @ design_x)
-    cov_hac: FloatArray = xtx_inv @ meat_s @ xtx_inv
-
-    if small_sample_adjust and n_obs > n_params:
-        cov_hac = cov_hac * (n_obs / float(n_obs - n_params))
-
-    return 0.5 * (cov_hac + cov_hac.T)
 
 
 def _two_sided_t_pvalues(t_stats: FloatArray, df_resid: int) -> FloatArray:
@@ -359,22 +271,48 @@ def _two_sided_t_pvalues(t_stats: FloatArray, df_resid: int) -> FloatArray:
         return np.array([erfc(float(val) / sqrt(2.0)) for val in abs_t], dtype=np.float64)
 
 
-def _build_ols_summary_from_covariance(
-    scheme_name: str,
-    theta_hat: FloatArray,
-    cov_matrix: FloatArray,
-    residuals: FloatArray,
-    r_squared: float,
-    adj_r_squared: float,
+def estimate_ff5_ols_loadings(
+    strategy_returns: pd.Series,
+    factors_df: pd.DataFrame,
+    scheme_name: str = "Strategy",
 ) -> OLSFactorSummary:
-    """Formats parameter estimates, HAC standard errors, t-stats, and p-values into summary."""
-    n_obs: int = residuals.shape[0]
-    df_resid: int = n_obs - theta_hat.shape[0]
-    std_errors: FloatArray = np.sqrt(np.maximum(np.diag(cov_matrix), 1e-18))
+    """
+    Estimates Fama-French 5-factor OLS alpha and factor loadings (Mkt-RF, SMB, HML, RMW, CMA).
+
+    Sub-issue #210: Solves least-squares parameter vector theta = (X^T X)^(-1) X^T y via
+    numerical QR/SVD least squares, extracting daily/annualized alpha, factor betas, R^2,
+    and adjusted R^2.
+    """
+    y_vec, design_x, _ = build_ff5_regression_matrices(
+        strategy_returns=strategy_returns,
+        factors_df=factors_df,
+    )
+    n_obs, n_params = design_x.shape
+    df_resid: int = n_obs - n_params
+    theta_hat, _, _, _ = np.linalg.lstsq(design_x, y_vec, rcond=None)
+    fitted: FloatArray = design_x @ theta_hat
+    residuals: FloatArray = y_vec - fitted
+    ss_res: float = float(residuals @ residuals)
+    y_centered: FloatArray = y_vec - float(np.mean(y_vec))
+    ss_tot: float = float(y_centered @ y_centered)
+    r_squared: float = 1.0 - (ss_res / ss_tot) if ss_tot > 0.0 else 0.0
+    adj_r_squared: float = 1.0 - (1.0 - r_squared) * ((n_obs - 1) / df_resid)
+    sigma2_hat: float = ss_res / df_resid
+    xtx_inv: FloatArray = np.linalg.inv(design_x.T @ design_x)
+    cov_ols: FloatArray = sigma2_hat * xtx_inv
+    std_errors: FloatArray = np.sqrt(np.maximum(np.diag(cov_ols), 1e-18))
     t_stats_vec: FloatArray = theta_hat / std_errors
     p_vals_vec: FloatArray = _two_sided_t_pvalues(t_stats_vec, df_resid=df_resid)
-
     alpha_daily: float = float(theta_hat[0])
+    betas_dict: Dict[str, float] = {
+        factor: float(theta_hat[idx + 1]) for idx, factor in enumerate(FF5_FACTOR_COLUMNS)
+    }
+    t_stats_dict: Dict[str, float] = {
+        name: float(t_stats_vec[idx]) for idx, name in enumerate(FF5_REGRESSOR_NAMES)
+    }
+    p_values_dict: Dict[str, float] = {
+        name: float(p_vals_vec[idx]) for idx, name in enumerate(FF5_REGRESSOR_NAMES)
+    }
     return OLSFactorSummary(
         scheme_name=scheme_name,
         n_observations=n_obs,
@@ -384,69 +322,11 @@ def _build_ols_summary_from_covariance(
         alpha_p_value=float(p_vals_vec[0]),
         r_squared=r_squared,
         adj_r_squared=adj_r_squared,
-        betas={
-            factor: float(theta_hat[idx + 1]) for idx, factor in enumerate(FF5_FACTOR_COLUMNS)
-        },
-        t_stats={name: float(t_stats_vec[idx]) for idx, name in enumerate(FF5_REGRESSOR_NAMES)},
-        p_values={name: float(p_vals_vec[idx]) for idx, name in enumerate(FF5_REGRESSOR_NAMES)},
+        betas=betas_dict,
+        t_stats=t_stats_dict,
+        p_values=p_values_dict,
         residuals=residuals,
     )
-
-
-def estimate_ff5_ols_loadings(
-    strategy_returns: pd.Series,
-    factors_df: pd.DataFrame,
-    scheme_name: str = "Strategy",
-    hac_max_lags: int = 5,
-) -> OLSFactorSummary:
-    """
-    Estimates Fama-French 5-factor OLS alpha and factor loadings with Newey-West HAC inference.
-
-    Sub-issue #210: Solves least-squares parameter vector theta = (X^T X)^(-1) X^T y.
-    Sub-issue #211: Applies Newey-West HAC covariance corrections (default max_lags=5) for
-    serial correlation and heteroskedasticity in daily excess return residuals.
-
-    Args:
-        strategy_returns: Daily net portfolio return series indexed by trading date.
-        factors_df: Decimal FF5 factor DataFrame containing Mkt-RF, SMB, HML, RMW, CMA, RF.
-        scheme_name: Human-readable label for the strategy or weighting scheme.
-        hac_max_lags: Newey-West truncation lag L (default 5 trading days).
-
-    Returns:
-        OLSFactorSummary populated with alpha, factor betas, R^2, and HAC t-stats/p-values.
-    """
-    y_vec, design_x, _ = build_ff5_regression_matrices(
-        strategy_returns=strategy_returns,
-        factors_df=factors_df,
-    )
-    n_obs, n_params = design_x.shape
-    df_resid: int = n_obs - n_params
-
-    theta_hat, _, _, _ = np.linalg.lstsq(design_x, y_vec, rcond=None)
-    residuals: FloatArray = y_vec - (design_x @ theta_hat)
-
-    ss_res: float = float(residuals @ residuals)
-    y_centered: FloatArray = y_vec - float(np.mean(y_vec))
-    ss_tot: float = float(y_centered @ y_centered)
-    r_squared: float = 1.0 - (ss_res / ss_tot) if ss_tot > 0.0 else 0.0
-    adj_r_squared: float = 1.0 - (1.0 - r_squared) * ((n_obs - 1) / df_resid)
-
-    cov_hac: FloatArray = compute_newey_west_hac_covariance(
-        design_x=design_x,
-        residuals=residuals,
-        max_lags=hac_max_lags,
-        small_sample_adjust=True,
-    )
-
-    return _build_ols_summary_from_covariance(
-        scheme_name=scheme_name,
-        theta_hat=theta_hat,
-        cov_matrix=cov_hac,
-        residuals=residuals,
-        r_squared=r_squared,
-        adj_r_squared=adj_r_squared,
-    )
-
 
 if __name__ == "__main__":
     default_cfg = FactorAttributionConfig()
