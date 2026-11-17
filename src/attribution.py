@@ -225,6 +225,60 @@ def align_strategy_and_factors(
     return excess_returns, aligned_factors
 
 
+FF5_REGRESSOR_NAMES: Tuple[str, ...] = ("alpha", "Mkt-RF", "SMB", "HML", "RMW", "CMA")
+
+def build_ff5_regression_matrices(
+    strategy_returns: pd.Series,
+    factors_df: pd.DataFrame,
+    factor_columns: Tuple[str, ...] = FF5_FACTOR_COLUMNS,
+) -> Tuple[FloatArray, FloatArray, pd.DatetimeIndex]:
+    """
+    Formulates the Fama-French 5-factor multi-factor excess return regression equation:
+        R_{p,t}^e = alpha + beta_MKT*(Mkt-RF)_t + beta_SMB*SMB_t + beta_HML*HML_t
+                    + beta_RMW*RMW_t + beta_CMA*CMA_t + eps_t
+
+    Sub-issue #209: Aligns strategy net returns with FF5 factors, computes dependent
+    excess return vector y = r_net - RF, and constructs design matrix X = [1, F].
+
+    Args:
+        strategy_returns: Daily net portfolio return series indexed by trading date.
+        factors_df: Decimal FF5 factor DataFrame containing Mkt-RF, SMB, HML, RMW, CMA, RF.
+        factor_columns: Ordered tuple of factor regressor column names.
+
+    Returns:
+        Tuple (y, design_x, aligned_index) where:
+            y: 1D float64 array of daily excess returns of shape (T,).
+            design_x: 2D float64 design matrix of shape (T, 1 + len(factor_columns)) with
+                leading unit intercept column.
+            aligned_index: Matching DatetimeIndex of length T.
+
+    Raises:
+        ValueError: If fewer than (K + 2) finite observations exist or non-finite values appear.
+    """
+    excess_returns, aligned_factors = align_strategy_and_factors(
+        strategy_returns=strategy_returns,
+        factors_df=factors_df,
+    )
+
+    y_vec: FloatArray = excess_returns.to_numpy(dtype=np.float64)
+    factor_mat: FloatArray = aligned_factors[list(factor_columns)].to_numpy(dtype=np.float64)
+
+    if not (np.all(np.isfinite(y_vec)) and np.all(np.isfinite(factor_mat))):
+        raise ValueError("Non-finite observations detected in excess returns or FF5 factors.")
+
+    n_obs: int = y_vec.shape[0]
+    n_params: int = 1 + factor_mat.shape[1]
+    if n_obs <= n_params:
+        raise ValueError(
+            f"Insufficient observations (T={n_obs}) to estimate {n_params} FF5 parameters."
+        )
+
+    intercept_col: FloatArray = np.ones((n_obs, 1), dtype=np.float64)
+    design_x: FloatArray = np.hstack([intercept_col, factor_mat])
+
+    return y_vec, design_x, excess_returns.index
+
+
 if __name__ == "__main__":
     default_cfg = FactorAttributionConfig()
     ff5_df = download_ff5_daily_factors(default_cfg)
