@@ -48,3 +48,30 @@ $$
 
 * **Heteroskedasticity & Autocorrelation Consistent (HAC) Inference:** Standard errors and $t$-statistics are computed using Newey-West HAC covariance estimators (`maxlags = 5`) to account for daily volatility clustering and serial correlation.
 * **Annualized Alpha Scaling:** Daily intercept $\hat{\alpha}$ is annualized via $\hat{\alpha}_{\text{annual}} = 252 \cdot \hat{\alpha}$ (arithmetic) alongside compound annualized alpha $(1 + \hat{\alpha})^{252} - 1$.
+
+---
+
+## 4. Newey-West HAC Covariance & Lag Parameter Selection (#211–#212)
+
+### 4.1 Bartlett-Kernel HAC Variance Estimator
+Daily equity portfolio residuals exhibit conditional heteroskedasticity (volatility clustering during crisis regimes) and short-horizon serial correlation induced by staggered constituent drift and monthly rebalancing. To prevent downward-biased standard errors and inflated $t$-statistics, parameter covariance is estimated via the Newey-West (1987) HAC sandwich estimator with Bartlett kernel weights $w_{\ell}(L) = 1 - \frac{\ell}{L + 1}$:
+
+$$
+\hat{\Sigma}_{\text{NW}}(L) = \frac{T}{T - k} (X^{\top} X)^{-1} \hat{S}_L (X^{\top} X)^{-1}
+$$
+
+$$
+\hat{S}_L = \hat{\Gamma}_0 + \sum_{\ell=1}^{L} \left(1 - \frac{\ell}{L + 1}\right)\left(\hat{\Gamma}_\ell + \hat{\Gamma}_\ell^{\top}\right), \qquad \hat{\Gamma}_\ell = \sum_{t=\ell+1}^{T} \hat{\varepsilon}_t \hat{\varepsilon}_{t-\ell} x_t x_{t-\ell}^{\top}
+$$
+
+where $\frac{T}{T - k}$ ($k = 6$ parameters) applies finite-sample degrees-of-freedom adjustment.
+
+### 4.2 Truncation Lag Bandwidth Selection ($L = 5$ Baseline vs. $L^* = 10$ Plug-In)
+* **Primary Trading-Week Bandwidth ($L = 5$):** Set to $L = 5$ trading days (one complete NYSE trading week) in `FactorAttributionConfig.hac_max_lags` to capture intra-week autocorrelation, bid-ask bounce, and post-rebalance drift without introducing excessive variance into long-lag autocovariance matrices $\hat{\Gamma}_\ell$.
+* **Newey-West (1994) Automatic Plug-In Reference ($L^* = 10$):** Implemented in `recommend_newey_west_lags(T)` via the standard asymptotic growth rule:
+
+$$
+L^* = \left\lfloor 4 \left(\frac{T}{100}\right)^{2/9} \right\rfloor
+$$
+
+For our aligned sample of $T = 6,726$ trading sessions, $L^* = \lfloor 4 (67.26)^{2/9} \rfloor = 10$ trading days (two trading weeks), providing a secondary robustness benchmark against the $L = 5$ baseline.
