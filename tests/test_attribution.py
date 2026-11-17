@@ -126,7 +126,8 @@ class TestOLSRegressionAndHAC(unittest.TestCase):
         )
 
         true_alpha_daily = 0.05 / 252.0
-        noise = rng.normal(0.0, 0.003, size=n_days)
+        raw_noise = rng.normal(0.0, 0.003, size=n_days)
+        noise = raw_noise - np.mean(raw_noise)
         strat_ret = (
             factors["RF"]
             + true_alpha_daily
@@ -148,7 +149,7 @@ class TestOLSRegressionAndHAC(unittest.TestCase):
             scheme_name="Synthetic-FF5",
             hac_max_lags=5,
         )
-        self.assertAlmostEqual(summary.alpha_annualized, 0.05, delta=0.025)
+        self.assertAlmostEqual(summary.alpha_annualized, 0.05, delta=0.005)
         self.assertAlmostEqual(summary.betas["Mkt-RF"], 1.05, delta=0.05)
         self.assertAlmostEqual(summary.betas["SMB"], 0.30, delta=0.08)
         self.assertAlmostEqual(summary.betas["HML"], -0.20, delta=0.08)

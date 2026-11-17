@@ -389,8 +389,7 @@ def estimate_ff5_ols_loadings(
         small_sample_adjust=True,
     )
 
-    std_errors: FloatArray = np.sqrt(np.maximum(np.diag(cov_hac), 1e-18))
-    t_stats_vec: FloatArray = theta_hat / std_errors
+    t_stats_vec: FloatArray = theta_hat / np.sqrt(np.maximum(np.diag(cov_hac), 1e-18))
     p_vals_vec: FloatArray = _two_sided_t_pvalues(t_stats_vec, df_resid=n_obs - n_params)
 
     return OLSFactorSummary(
