@@ -68,6 +68,86 @@ class PermutationTestSummary:
     null_alpha_distribution: FloatArray
     null_sharpe_distribution: FloatArray
 
+
+FF5_DARTMOUTH_ZIP_URL: str = (
+    "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/"
+    "F-F_Research_Data_5_Factors_2x3_daily_CSV.zip"
+)
+
+
+def _fetch_ff5_raw_from_web(start_date: str, end_date: Optional[str] = None) -> pd.DataFrame:
+    """Fetches raw Kenneth French 5-Factor daily table via pandas-datareader or direct ZIP."""
+    try:
+        from pandas_datareader import data as pdr  # pylint: disable=import-outside-toplevel
+
+        ff_dict = pdr.DataReader(
+            FF5_DATASET_NAME,
+            "famafrench",
+            start=start_date,
+            end=end_date,
+        )
+        raw_df: pd.DataFrame = ff_dict[0].copy()
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logging.warning(
+            "pandas_datareader fallback triggered (%s); downloading Dartmouth ZIP directly.",
+            exc,
+        )
+        raw_df = pd.read_csv(
+            FF5_DARTMOUTH_ZIP_URL,
+            compression="zip",
+            skiprows=3,
+            index_col=0,
+        )
+        raw_df = raw_df[raw_df.index.astype(str).str.strip().str.match(r"^\d{8}$")]
+        raw_df.index = pd.to_datetime(raw_df.index.astype(str).str.strip(), format="%Y%m%d")
+
+    raw_df.columns = [str(col).strip() for col in raw_df.columns]
+    if isinstance(raw_df.index, pd.PeriodIndex):
+        raw_df.index = raw_df.index.to_timestamp()
+    else:
+        raw_df.index = pd.to_datetime(raw_df.index).tz_localize(None)
+
+    raw_df = raw_df.loc[start_date:end_date] if end_date else raw_df.loc[start_date:]
+    return raw_df[list(FF5_ALL_COLUMNS)].astype(np.float64)
+
+
+def download_ff5_daily_factors(
+    config: Optional[FactorAttributionConfig] = None,
+    force_refresh: bool = False,
+) -> pd.DataFrame:
+    """
+    Downloads and caches the Kenneth French 5-Factor daily return series (raw percentage units).
+
+    Args:
+        config: Optional FactorAttributionConfig specifying date bounds and cache path.
+        force_refresh: When True, bypasses local CSV cache and re-fetches from Kenneth French.
+
+    Returns:
+        DataFrame indexed by trading date with columns ['Mkt-RF', 'SMB', 'HML', 'RMW', 'CMA', 'RF'].
+    """
+    cfg: FactorAttributionConfig = config or FactorAttributionConfig()
+
+    if cfg.cache_path.exists() and not force_refresh:
+        cached_df: pd.DataFrame = pd.read_csv(cfg.cache_path, index_col=0, parse_dates=True)
+        cached_df.columns = [str(c).strip() for c in cached_df.columns]
+        if all(col in cached_df.columns for col in FF5_ALL_COLUMNS):
+            logging.info("Sub-issue #204: Loaded cached FF5 factors from %s", cfg.cache_path)
+            return cached_df[list(FF5_ALL_COLUMNS)].astype(np.float64)
+
+    raw_factors: pd.DataFrame = _fetch_ff5_raw_from_web(
+        start_date=cfg.start_date,
+        end_date=cfg.end_date,
+    )
+    cfg.cache_path.parent.mkdir(parents=True, exist_ok=True)
+    raw_factors.to_csv(cfg.cache_path, index=True)
+    logging.info(
+        "Sub-issue #204: Downloaded and cached %d FF5 daily rows to %s",
+        len(raw_factors),
+        cfg.cache_path,
+    )
+    return raw_factors
+
+
 def convert_percent_to_decimal(factors_df: pd.DataFrame) -> pd.DataFrame:
     """
     Converts raw Kenneth French percentage-unit factor returns into decimal returns.
