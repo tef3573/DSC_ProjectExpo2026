@@ -279,6 +279,91 @@ def build_ff5_regression_matrices(
     return y_vec, design_x, excess_returns.index
 
 
+
+def _two_sided_t_pvalues(t_stats: FloatArray, df_resid: int) -> FloatArray:
+    """Computes two-sided Student-t p-values using scipy if available, else normal approximation."""
+    abs_t: FloatArray = np.abs(t_stats)
+    try:
+        from scipy import stats as scipy_stats  # pylint: disable=import-outside-toplevel
+
+        return 2.0 * scipy_stats.t.sf(abs_t, df=df_resid)
+    except ImportError:
+        from math import erfc, sqrt  # pylint: disable=import-outside-toplevel
+
+        return np.array([erfc(float(val) / sqrt(2.0)) for val in abs_t], dtype=np.float64)
+
+
+def estimate_ff5_ols_loadings(
+    strategy_returns: pd.Series,
+    factors_df: pd.DataFrame,
+    scheme_name: str = "Strategy",
+) -> OLSFactorSummary:
+    """
+    Estimates Fama-French 5-factor OLS alpha and factor loadings (Mkt-RF, SMB, HML, RMW, CMA).
+
+    Sub-issue #210: Solves least-squares parameter vector theta = (X^T X)^(-1) X^T y via
+    numerical QR/SVD least squares, extracting daily/annualized alpha, factor betas, R^2,
+    and adjusted R^2.
+
+    Args:
+        strategy_returns: Daily net portfolio return series indexed by trading date.
+        factors_df: Decimal FF5 factor DataFrame containing Mkt-RF, SMB, HML, RMW, CMA, RF.
+        scheme_name: Human-readable label for the strategy or weighting scheme.
+
+    Returns:
+        OLSFactorSummary populated with alpha, factor betas, R^2, and baseline t-stats.
+    """
+    y_vec, design_x, _ = build_ff5_regression_matrices(
+        strategy_returns=strategy_returns,
+        factors_df=factors_df,
+    )
+    n_obs, n_params = design_x.shape
+    df_resid: int = n_obs - n_params
+
+    theta_hat, _, _, _ = np.linalg.lstsq(design_x, y_vec, rcond=None)
+    fitted: FloatArray = design_x @ theta_hat
+    residuals: FloatArray = y_vec - fitted
+
+    ss_res: float = float(residuals @ residuals)
+    y_centered: FloatArray = y_vec - float(np.mean(y_vec))
+    ss_tot: float = float(y_centered @ y_centered)
+    r_squared: float = 1.0 - (ss_res / ss_tot) if ss_tot > 0.0 else 0.0
+    adj_r_squared: float = 1.0 - (1.0 - r_squared) * ((n_obs - 1) / df_resid)
+
+    sigma2_hat: float = ss_res / df_resid
+    xtx_inv: FloatArray = np.linalg.inv(design_x.T @ design_x)
+    cov_ols: FloatArray = sigma2_hat * xtx_inv
+    std_errors: FloatArray = np.sqrt(np.maximum(np.diag(cov_ols), 1e-18))
+    t_stats_vec: FloatArray = theta_hat / std_errors
+    p_vals_vec: FloatArray = _two_sided_t_pvalues(t_stats_vec, df_resid=df_resid)
+
+    alpha_daily: float = float(theta_hat[0])
+    betas_dict: Dict[str, float] = {
+        factor: float(theta_hat[idx + 1]) for idx, factor in enumerate(FF5_FACTOR_COLUMNS)
+    }
+    t_stats_dict: Dict[str, float] = {
+        name: float(t_stats_vec[idx]) for idx, name in enumerate(FF5_REGRESSOR_NAMES)
+    }
+    p_values_dict: Dict[str, float] = {
+        name: float(p_vals_vec[idx]) for idx, name in enumerate(FF5_REGRESSOR_NAMES)
+    }
+
+    return OLSFactorSummary(
+        scheme_name=scheme_name,
+        n_observations=n_obs,
+        alpha_daily=alpha_daily,
+        alpha_annualized=alpha_daily * TRADING_DAYS_PER_YEAR,
+        alpha_t_stat=float(t_stats_vec[0]),
+        alpha_p_value=float(p_vals_vec[0]),
+        r_squared=r_squared,
+        adj_r_squared=adj_r_squared,
+        betas=betas_dict,
+        t_stats=t_stats_dict,
+        p_values=p_values_dict,
+        residuals=residuals,
+    )
+
+
 if __name__ == "__main__":
     default_cfg = FactorAttributionConfig()
     ff5_df = download_ff5_daily_factors(default_cfg)
