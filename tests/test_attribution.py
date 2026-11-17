@@ -10,8 +10,12 @@ from src.attribution import (
     FF5_ALL_COLUMNS,
     FF5_CACHE_PATH,
     align_strategy_and_factors,
+    build_ff5_regression_matrices,
+    compute_newey_west_hac_covariance,
     convert_percent_to_decimal,
     download_ff5_daily_factors,
+    estimate_ff5_ols_loadings,
+    recommend_newey_west_lags,
 )
 
 
@@ -96,6 +100,98 @@ class TestFactorIngestionAndAlignment(unittest.TestCase):
         strat_disjoint = pd.Series([0.01], index=pd.to_datetime(["1995-01-03"]))
         with self.assertRaises(ValueError):
             align_strategy_and_factors(strat_disjoint, ff5_mock)
+
+
+
+
+class TestOLSRegressionAndHAC(unittest.TestCase):
+    """Sub-issues #209-#213: Verify FF5 OLS regression, HAC covariance, and equity R-squared."""
+
+    def test_synthetic_ff5_parameter_recovery_and_hac_symmetry(self) -> None:
+        """Sub-issues #209-#211: Verify exact parameter recovery and symmetric PSD HAC matrix."""
+        rng = np.random.default_rng(42)
+        n_days = 600
+        dates = pd.bdate_range("2018-01-02", periods=n_days)
+
+        factors = pd.DataFrame(
+            {
+                "Mkt-RF": rng.normal(0.0004, 0.011, size=n_days),
+                "SMB": rng.normal(0.0001, 0.006, size=n_days),
+                "HML": rng.normal(0.0001, 0.006, size=n_days),
+                "RMW": rng.normal(0.0001, 0.005, size=n_days),
+                "CMA": rng.normal(0.0000, 0.005, size=n_days),
+                "RF": np.full(n_days, 0.00008),
+            },
+            index=dates,
+        )
+
+        true_alpha_daily = 0.05 / 252.0
+        raw_noise = rng.normal(0.0, 0.003, size=n_days)
+        noise = raw_noise - np.mean(raw_noise)
+        strat_ret = (
+            factors["RF"]
+            + true_alpha_daily
+            + 1.05 * factors["Mkt-RF"]
+            + 0.30 * factors["SMB"]
+            - 0.20 * factors["HML"]
+            + 0.15 * factors["RMW"]
+            + 0.10 * factors["CMA"]
+            + noise
+        )
+
+        y_vec, design_x, _ = build_ff5_regression_matrices(strat_ret, factors)
+        self.assertEqual(y_vec.shape, (n_days,))
+        self.assertEqual(design_x.shape, (n_days, 6))
+
+        summary = estimate_ff5_ols_loadings(
+            strat_ret,
+            factors,
+            scheme_name="Synthetic-FF5",
+            hac_max_lags=5,
+        )
+        self.assertAlmostEqual(summary.alpha_annualized, 0.05, delta=0.005)
+        self.assertAlmostEqual(summary.betas["Mkt-RF"], 1.05, delta=0.05)
+        self.assertAlmostEqual(summary.betas["SMB"], 0.30, delta=0.08)
+        self.assertAlmostEqual(summary.betas["HML"], -0.20, delta=0.08)
+        self.assertGreater(summary.r_squared, 0.85)
+
+        assert summary.residuals is not None
+        cov_hac = compute_newey_west_hac_covariance(design_x, summary.residuals, max_lags=5)
+        np.testing.assert_allclose(cov_hac, cov_hac.T, rtol=1e-12, atol=1e-15)
+        eigvals = np.linalg.eigvalsh(cov_hac)
+        self.assertTrue(np.all(eigvals > 0.0))
+        self.assertEqual(recommend_newey_west_lags(6726), 10)
+
+    def test_empirical_regression_r_squared_within_standard_equity_ranges(self) -> None:
+        """Sub-issue #213: Confirm daily FF5 R-squared lies within standard equity bounds."""
+        bt_df = pd.read_csv(BACKTEST_RESULTS_PATH, index_col=0, parse_dates=True)
+        ff5_df = download_ff5_daily_factors(force_refresh=False, as_decimal=True)
+
+        ew_res = estimate_ff5_ols_loadings(
+            bt_df["Black_CEO_Net"],
+            ff5_df,
+            scheme_name="Equal-Weight",
+            hac_max_lags=5,
+        )
+        cq_res = estimate_ff5_ols_loadings(
+            bt_df["Convex_Quality_Net"],
+            ff5_df,
+            scheme_name="Convex-Quality",
+            hac_max_lags=5,
+        )
+
+        for res in (ew_res, cq_res):
+            with self.subTest(scheme=res.scheme_name):
+                self.assertGreaterEqual(res.r_squared, 0.10)
+                self.assertLessEqual(res.r_squared, 0.90)
+                self.assertLessEqual(res.adj_r_squared, res.r_squared)
+                self.assertGreater(res.betas["Mkt-RF"], 0.50)
+                self.assertTrue(np.isfinite(res.alpha_t_stat))
+                self.assertGreaterEqual(res.alpha_p_value, 0.0)
+                self.assertLessEqual(res.alpha_p_value, 1.0)
+
+        # Risk-controlled Convex Quality portfolio should exhibit tighter factor R^2 than EW
+        self.assertGreater(cq_res.r_squared, ew_res.r_squared)
 
 
 if __name__ == "__main__":
