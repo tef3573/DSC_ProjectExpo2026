@@ -88,7 +88,7 @@ class TestFactorIngestionAndAlignment(unittest.TestCase):
             [0.01, -0.005],
             index=pd.to_datetime(["2020-01-03", "2020-01-06"]).tz_localize("UTC"),
         )
-        excess_ret, aligned_ff5 = align_strategy_and_factors(strat_tz, ff5_mock)
+        excess_ret, _ = align_strategy_and_factors(strat_tz, ff5_mock)
         self.assertEqual(len(excess_ret), 2)
         self.assertIsNone(excess_ret.index.tz)
         self.assertAlmostEqual(float(excess_ret.iloc[0]), 0.01 - (-0.002), places=12)
