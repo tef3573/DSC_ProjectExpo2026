@@ -10,7 +10,7 @@ Milestone 4: Factor Attribution & Robustness
 """
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 import logging
 import warnings
 
@@ -575,17 +575,20 @@ def format_ff5_regression_markdown_table(
         f"{s.alpha_annualized:+.2%}{_significance_stars(s.alpha_p_value)} ({s.alpha_t_stat:+.2f})"
         for s in summaries
     ]
-    lines.append("| **Annualized Alpha ($\hat{\alpha}_{\text{ann}}$)** | " + " | ".join(alpha_cells) + " |")
+    alpha_label: str = r"| **Annualized Alpha ($\hat{lpha}_{	ext{ann}}$)** | "
+    lines.append(alpha_label + " | ".join(alpha_cells) + " |")
 
     p_one_cells: List[str] = [
         f"{(0.5 * s.alpha_p_value if s.alpha_t_stat >= 0.0 else 1.0 - 0.5 * s.alpha_p_value):.4f}"
         for s in summaries
     ]
-    lines.append("| **One-Sided $p$-value ($H_0: \alpha \le 0$)** | " + " | ".join(p_one_cells) + " |")
+    p_one_label: str = r"| **One-Sided $p$-value ($H_0: lpha \le 0$)** | "
+    lines.append(p_one_label + " | ".join(p_one_cells) + " |")
 
     for factor in FF5_FACTOR_COLUMNS:
         cells: List[str] = [
-            f"{s.betas[factor]:+.3f}{_significance_stars(s.p_values[factor])} ({s.t_stats[factor]:+.2f})"
+            f"{s.betas[factor]:+.3f}{_significance_stars(s.p_values[factor])}"
+            f" ({s.t_stats[factor]:+.2f})"
             for s in summaries
         ]
         lines.append(f"| **{factor}** | " + " | ".join(cells) + " |")
