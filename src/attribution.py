@@ -10,7 +10,7 @@ Milestone 4: Factor Attribution & Robustness
 """
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 import logging
 import warnings
 
@@ -65,6 +65,26 @@ class OLSFactorSummary:  # pylint: disable=too-many-instance-attributes
     t_stats: Dict[str, float] = field(default_factory=dict)
     p_values: Dict[str, float] = field(default_factory=dict)
     residuals: Optional[FloatArray] = None
+
+
+@dataclass
+class AlphaInferenceSummary:  # pylint: disable=too-many-instance-attributes
+    """Container for annualized strategy alpha, HAC standard error, and hypothesis p-values."""
+
+    scheme_name: str
+    n_observations: int
+    hac_max_lags: int
+    alpha_daily: float
+    alpha_annualized: float
+    alpha_compounded: float
+    alpha_hac_se_annual: float
+    alpha_t_stat: float
+    p_value_two_sided: float
+    p_value_one_sided_gt_zero: float
+    reject_null_at_5pct: bool
+    reject_null_at_10pct: bool
+    ci_95_lower_annual: float
+    ci_95_upper_annual: float
 
 
 @dataclass
@@ -406,6 +426,188 @@ def estimate_ff5_ols_loadings(
         p_values={name: float(p_vals_vec[i]) for i, name in enumerate(FF5_REGRESSOR_NAMES)},
         residuals=residuals,
     )
+
+
+def calculate_annualized_alpha_inference(
+    strategy_returns: pd.Series,
+    factors_df: pd.DataFrame,
+    scheme_name: str = "Strategy",
+    hac_max_lags: int = 5,
+) -> AlphaInferenceSummary:
+    """
+    Calculates annualized Fama-French 5-factor strategy alpha and its Newey-West HAC t-statistic.
+
+    Sub-issue #214: Computes arithmetic annualized alpha (252 * alpha_daily), compounded
+    annualized alpha ((1 + alpha_daily)^252 - 1), annualized HAC standard error, 95% CI,
+    and invariant HAC t-statistic t = alpha_daily / SE_HAC(alpha_daily).
+
+    Args:
+        strategy_returns: Daily net portfolio return series indexed by trading date.
+        factors_df: Decimal FF5 factor DataFrame containing Mkt-RF, SMB, HML, RMW, CMA, RF.
+        scheme_name: Human-readable label for the strategy or weighting scheme.
+        hac_max_lags: Newey-West truncation lag L (default 5 trading days).
+
+    Returns:
+        AlphaInferenceSummary containing annualized alpha estimates and HAC t-statistic.
+    """
+    ols_summary: OLSFactorSummary = estimate_ff5_ols_loadings(
+        strategy_returns=strategy_returns,
+        factors_df=factors_df,
+        scheme_name=scheme_name,
+        hac_max_lags=hac_max_lags,
+    )
+
+    alpha_daily: float = ols_summary.alpha_daily
+    alpha_annual: float = alpha_daily * TRADING_DAYS_PER_YEAR
+    alpha_compound: float = float((1.0 + alpha_daily) ** TRADING_DAYS_PER_YEAR - 1.0)
+
+    if abs(ols_summary.alpha_t_stat) > 1e-15:
+        se_daily: float = abs(alpha_daily / ols_summary.alpha_t_stat)
+    else:
+        _, design_x, _ = build_ff5_regression_matrices(strategy_returns, factors_df)
+        assert ols_summary.residuals is not None
+        cov_hac = compute_newey_west_hac_covariance(
+            design_x=design_x,
+            residuals=ols_summary.residuals,
+            max_lags=hac_max_lags,
+        )
+        se_daily = float(np.sqrt(max(cov_hac[0, 0], 1e-18)))
+
+    se_annual: float = se_daily * TRADING_DAYS_PER_YEAR
+    margin_95: float = 1.959963984540054 * se_annual
+    p_two_sided: float = ols_summary.alpha_p_value
+    p_one_sided: float = (
+        (0.5 * p_two_sided) if ols_summary.alpha_t_stat >= 0.0 else (1.0 - 0.5 * p_two_sided)
+    )
+
+    return AlphaInferenceSummary(
+        scheme_name=scheme_name,
+        n_observations=ols_summary.n_observations,
+        hac_max_lags=hac_max_lags,
+        alpha_daily=alpha_daily,
+        alpha_annualized=alpha_annual,
+        alpha_compounded=alpha_compound,
+        alpha_hac_se_annual=se_annual,
+        alpha_t_stat=ols_summary.alpha_t_stat,
+        p_value_two_sided=p_two_sided,
+        p_value_one_sided_gt_zero=p_one_sided,
+        reject_null_at_5pct=bool(p_one_sided < 0.05),
+        reject_null_at_10pct=bool(p_one_sided < 0.10),
+        ci_95_lower_annual=alpha_annual - margin_95,
+        ci_95_upper_annual=alpha_annual + margin_95,
+    )
+
+
+def evaluate_alpha_hypothesis_test(
+    strategy_returns: pd.Series,
+    factors_df: pd.DataFrame,
+    scheme_name: str = "Strategy",
+    hac_max_lags: int = 5,
+    significance_level: float = 0.05,
+) -> Dict[str, object]:
+    """
+    Evaluates one-sided null hypothesis H0: alpha <= 0 against H1: alpha > 0 using Newey-West HAC.
+
+    Sub-issue #215: Extracts one-sided and two-sided Student-t p-values and returns structured
+    rejection decisions at the requested significance threshold.
+    """
+    inf: AlphaInferenceSummary = calculate_annualized_alpha_inference(
+        strategy_returns=strategy_returns,
+        factors_df=factors_df,
+        scheme_name=scheme_name,
+        hac_max_lags=hac_max_lags,
+    )
+    return {
+        "scheme_name": inf.scheme_name,
+        "hac_max_lags": inf.hac_max_lags,
+        "alpha_annualized": inf.alpha_annualized,
+        "alpha_t_stat": inf.alpha_t_stat,
+        "p_value_one_sided_gt_zero": inf.p_value_one_sided_gt_zero,
+        "p_value_two_sided": inf.p_value_two_sided,
+        "significance_level": significance_level,
+        "reject_h0_alpha_lte_zero": bool(inf.p_value_one_sided_gt_zero < significance_level),
+    }
+
+
+def _significance_stars(p_value: float) -> str:
+    """Returns standard academic significance stars for two-sided p-values."""
+    if p_value < 0.01:
+        return "***"
+    if p_value < 0.05:
+        return "**"
+    if p_value < 0.10:
+        return "*"
+    return ""
+
+
+def format_ff5_regression_markdown_table(
+    summaries: Sequence[OLSFactorSummary],
+    hac_max_lags: int = 5,
+) -> str:
+    """
+    Formats Fama-French 5-factor OLS/HAC regression results into a publication-ready
+    GitHub-Flavored Markdown table comparing factor loadings, HAC t-statistics, and R^2.
+
+    Sub-issue #216: Produces clean Markdown summary tables for direct inclusion in
+    docs/attribution.md and Milestone 4 reporting artifacts.
+
+    Args:
+        summaries: Sequence of OLSFactorSummary objects (e.g., Equal-Weight, Convex-Quality).
+        hac_max_lags: Truncation lag L used for Newey-West HAC standard errors.
+
+    Returns:
+        Formatted Markdown string containing the multi-scheme regression table and notes.
+
+    Raises:
+        ValueError: If summaries sequence is empty.
+    """
+    if not summaries:
+        raise ValueError("Cannot format Markdown regression table from an empty summary list.")
+
+    headers: List[str] = ["Parameter / Metric"] + [s.scheme_name for s in summaries]
+    alignments: List[str] = [":---"] + [":---:" for _ in summaries]
+    lines: List[str] = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join(alignments) + " |",
+    ]
+
+    alpha_cells: List[str] = [
+        f"{s.alpha_annualized:+.2%}{_significance_stars(s.alpha_p_value)} ({s.alpha_t_stat:+.2f})"
+        for s in summaries
+    ]
+    alpha_label: str = r"| **Annualized Alpha ($\hat{\alpha}_{\text{ann}}$)** | "
+    lines.append(alpha_label + " | ".join(alpha_cells) + " |")
+
+    p_one_cells: List[str] = [
+        f"{(0.5 * s.alpha_p_value if s.alpha_t_stat >= 0.0 else 1.0 - 0.5 * s.alpha_p_value):.4f}"
+        for s in summaries
+    ]
+    p_one_label: str = r"| **One-Sided $p$-value ($H_0: \alpha \le 0$)** | "
+    lines.append(p_one_label + " | ".join(p_one_cells) + " |")
+
+    for factor in FF5_FACTOR_COLUMNS:
+        cells: List[str] = [
+            f"{s.betas[factor]:+.3f}{_significance_stars(s.p_values[factor])}"
+            f" ({s.t_stats[factor]:+.2f})"
+            for s in summaries
+        ]
+        lines.append(f"| **{factor}** | " + " | ".join(cells) + " |")
+
+    r2_cells: List[str] = [f"{s.r_squared:.4f}" for s in summaries]
+    adj_r2_cells: List[str] = [f"{s.adj_r_squared:.4f}" for s in summaries]
+    n_cells: List[str] = [f"{s.n_observations:,}" for s in summaries]
+
+    lines.extend(
+        [
+            "| **$R^2$** | " + " | ".join(r2_cells) + " |",
+            "| **Adjusted $R^2$** | " + " | ".join(adj_r2_cells) + " |",
+            "| **Aligned Sessions ($T$)** | " + " | ".join(n_cells) + " |",
+            "",
+            f"*Note: Newey-West HAC $t$-statistics ($L = {hac_max_lags}$) shown in parentheses. "
+            "Two-sided significance: `*` $p < 0.10$, `**` $p < 0.05$, `***` $p < 0.01$.*",
+        ]
+    )
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":

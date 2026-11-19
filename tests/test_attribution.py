@@ -9,12 +9,16 @@ from src.attribution import (
     BACKTEST_RESULTS_PATH,
     FF5_ALL_COLUMNS,
     FF5_CACHE_PATH,
+    FF5_FACTOR_COLUMNS,
     align_strategy_and_factors,
     build_ff5_regression_matrices,
+    calculate_annualized_alpha_inference,
     compute_newey_west_hac_covariance,
     convert_percent_to_decimal,
     download_ff5_daily_factors,
     estimate_ff5_ols_loadings,
+    evaluate_alpha_hypothesis_test,
+    format_ff5_regression_markdown_table,
     recommend_newey_west_lags,
 )
 
@@ -192,6 +196,79 @@ class TestOLSRegressionAndHAC(unittest.TestCase):
 
         # Risk-controlled Convex Quality portfolio should exhibit tighter factor R^2 than EW
         self.assertGreater(cq_res.r_squared, ew_res.r_squared)
+
+
+
+
+class TestStatisticalSignificanceAndResiduals(unittest.TestCase):
+    """Sub-issues #214-#218: Verify alpha inference, hypothesis p-values, and zero residual mean."""
+
+    def test_regression_residual_mean_equals_zero_and_orthogonal_to_factors(self) -> None:
+        """Sub-issue #218: Assert OLS residuals have zero sample mean and factor orthogonality."""
+        bt_df = pd.read_csv(BACKTEST_RESULTS_PATH, index_col=0, parse_dates=True)
+        ff5_df = download_ff5_daily_factors(force_refresh=False, as_decimal=True)
+
+        for col, name in [
+            ("Black_CEO_Net", "Equal-Weight"),
+            ("Convex_Quality_Net", "Convex-Quality"),
+        ]:
+            with self.subTest(scheme=name):
+                _, design_x, _ = build_ff5_regression_matrices(bt_df[col], ff5_df)
+                summary = estimate_ff5_ols_loadings(
+                    bt_df[col],
+                    ff5_df,
+                    scheme_name=name,
+                    hac_max_lags=5,
+                )
+                assert summary.residuals is not None
+                residual_mean = float(np.mean(summary.residuals))
+                self.assertAlmostEqual(residual_mean, 0.0, places=14)
+
+                # Normal equations guarantee X^T * e = 0 across intercept and all 5 FF factors
+                orthogonality = design_x.T @ summary.residuals
+                np.testing.assert_allclose(orthogonality, np.zeros(6), atol=1e-11)
+
+    def test_alpha_hypothesis_test_and_markdown_table_export(
+        self,
+    ) -> None:
+        """Sub-issues #214-#216: Verify annualized alpha CI, one-sided p-value, and Markdown table."""
+        bt_df = pd.read_csv(BACKTEST_RESULTS_PATH, index_col=0, parse_dates=True)
+        ff5_df = download_ff5_daily_factors(force_refresh=False, as_decimal=True)
+
+        ew_inf = calculate_annualized_alpha_inference(
+            bt_df["Black_CEO_Net"],
+            ff5_df,
+            scheme_name="Equal-Weight (Net)",
+            hac_max_lags=5,
+        )
+        self.assertLess(ew_inf.ci_95_lower_annual, ew_inf.alpha_annualized)
+        self.assertGreater(ew_inf.ci_95_upper_annual, ew_inf.alpha_annualized)
+        self.assertAlmostEqual(
+            ew_inf.p_value_one_sided_gt_zero,
+            0.5 * ew_inf.p_value_two_sided,
+            places=12,
+        )
+
+        verdict = evaluate_alpha_hypothesis_test(
+            bt_df["Convex_Quality_Net"],
+            ff5_df,
+            scheme_name="Convex-Quality (Net)",
+            hac_max_lags=5,
+            significance_level=0.05,
+        )
+        self.assertFalse(verdict["reject_h0_alpha_lte_zero"])
+        self.assertEqual(len(FF5_FACTOR_COLUMNS), 5)
+
+        ew_ols = estimate_ff5_ols_loadings(
+            bt_df["Black_CEO_Net"], ff5_df, scheme_name="Equal-Weight (Net)", hac_max_lags=5
+        )
+        cq_ols = estimate_ff5_ols_loadings(
+            bt_df["Convex_Quality_Net"], ff5_df, scheme_name="Convex-Quality (Net)", hac_max_lags=5
+        )
+        md_table = format_ff5_regression_markdown_table([ew_ols, cq_ols], hac_max_lags=5)
+        self.assertIn(r"| **Annualized Alpha ($\hat{\alpha}_{\text{ann}}$)** |", md_table)
+        self.assertIn("Equal-Weight (Net)", md_table)
+        self.assertIn("Convex-Quality (Net)", md_table)
 
 
 if __name__ == "__main__":
