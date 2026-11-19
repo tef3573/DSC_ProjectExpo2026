@@ -1,22 +1,18 @@
 """
 src/attribution.py
 Fama-French 5-Factor (FF5) Attribution, Newey-West HAC Inference & Monte Carlo Permutation Engine.
-
-Milestone 4: Factor Attribution & Robustness
-- Sub-issue #203: Initialize src/attribution.py module structure and typed data contracts.
-- Sub-issue #204: Download Kenneth French 5-Factor daily series via web reader / direct archive.
-- Sub-issue #205: Convert factor percentage figures to decimal representation.
-- Sub-issue #207: Align strategy daily excess returns with FF5 trading calendar.
 """
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 import logging
 import warnings
-
 import numpy as np
 from numpy.typing import NDArray
 import pandas as pd
+import time
+import pandas as pd
+from src.attribution import SyntheticBootstrapEngine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -40,7 +36,6 @@ FloatArray = NDArray[np.float64]
 @dataclass(frozen=True)
 class FactorAttributionConfig:
     """Configuration parameters for Fama-French 5-factor attribution and robustness tests."""
-
     start_date: str = "2000-01-01"
     end_date: Optional[str] = None
     hac_max_lags: int = 5
@@ -52,7 +47,6 @@ class FactorAttributionConfig:
 @dataclass
 class OLSFactorSummary:  # pylint: disable=too-many-instance-attributes
     """Container for Newey-West HAC Fama-French 5-factor regression estimates."""
-
     scheme_name: str
     n_observations: int
     alpha_daily: float
@@ -70,7 +64,6 @@ class OLSFactorSummary:  # pylint: disable=too-many-instance-attributes
 @dataclass
 class AlphaInferenceSummary:  # pylint: disable=too-many-instance-attributes
     """Container for annualized strategy alpha, HAC standard error, and hypothesis p-values."""
-
     scheme_name: str
     n_observations: int
     hac_max_lags: int
@@ -90,7 +83,6 @@ class AlphaInferenceSummary:  # pylint: disable=too-many-instance-attributes
 @dataclass
 class PermutationTestSummary:  # pylint: disable=too-many-instance-attributes
     """Container for Monte Carlo block/residual permutation robustness results."""
-
     scheme_name: str
     observed_alpha_annual: float
     observed_sharpe: float
@@ -104,12 +96,6 @@ class PermutationTestSummary:  # pylint: disable=too-many-instance-attributes
 def convert_percent_to_decimal(factors_df: pd.DataFrame) -> pd.DataFrame:
     """
     Converts raw Kenneth French percentage-unit factor returns into decimal returns.
-
-    Args:
-        factors_df: DataFrame with raw FF5 percentage figures (e.g., 1.25 -> 0.0125).
-
-    Returns:
-        DataFrame with floating-point decimal returns.
     """
     return factors_df.astype(np.float64) / 100.0
 
@@ -118,7 +104,6 @@ def _fetch_ff5_raw_from_web(start_date: str, end_date: Optional[str] = None) -> 
     """Fetches raw Kenneth French 5-Factor daily table via pandas-datareader or direct ZIP."""
     try:
         from pandas_datareader import data as pdr  # pylint: disable=import-outside-toplevel
-
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
             ff_dict = pdr.DataReader(
@@ -141,13 +126,11 @@ def _fetch_ff5_raw_from_web(start_date: str, end_date: Optional[str] = None) -> 
         )
         raw_df = raw_df[raw_df.index.astype(str).str.strip().str.match(r"^\d{8}$")]
         raw_df.index = pd.to_datetime(raw_df.index.astype(str).str.strip(), format="%Y%m%d")
-
     raw_df.columns = [str(col).strip() for col in raw_df.columns]
     if isinstance(raw_df.index, pd.PeriodIndex):
         raw_df.index = raw_df.index.to_timestamp()
     else:
         raw_df.index = pd.to_datetime(raw_df.index).tz_localize(None)
-
     raw_df = raw_df.loc[start_date:end_date] if end_date else raw_df.loc[start_date:]
     return raw_df[list(FF5_ALL_COLUMNS)].astype(np.float64)
 
@@ -159,20 +142,8 @@ def download_ff5_daily_factors(
 ) -> pd.DataFrame:
     """
     Downloads and caches the Kenneth French 5-Factor daily return series.
-
-    Sub-issue #204: Fetches FF5 daily series via web reader and caches locally.
-    Sub-issue #205: Converts raw percentage figures (e.g., 1.25) to decimal returns (0.0125).
-
-    Args:
-        config: Optional FactorAttributionConfig specifying date bounds and cache path.
-        force_refresh: When True, bypasses local CSV cache and re-fetches from Kenneth French.
-        as_decimal: When True (default), returns and caches decimal returns (raw / 100).
-
-    Returns:
-        DataFrame indexed by trading date with columns ['Mkt-RF', 'SMB', 'HML', 'RMW', 'CMA', 'RF'].
     """
     cfg: FactorAttributionConfig = config or FactorAttributionConfig()
-
     if cfg.cache_path.exists() and not force_refresh:
         cached_df: pd.DataFrame = pd.read_csv(cfg.cache_path, index_col=0, parse_dates=True)
         cached_df.columns = [str(c).strip() for c in cached_df.columns]
@@ -184,7 +155,6 @@ def download_ff5_daily_factors(
                 factors.to_csv(cfg.cache_path, index=True)
             logging.info("Sub-issue #204/#205: Loaded FF5 factors from %s", cfg.cache_path)
             return factors
-
     raw_factors: pd.DataFrame = _fetch_ff5_raw_from_web(
         start_date=cfg.start_date,
         end_date=cfg.end_date,
@@ -209,17 +179,6 @@ def align_strategy_and_factors(
 ) -> Tuple[pd.Series, pd.DataFrame]:
     """
     Inner-joins strategy daily returns onto the FF5 calendar and computes excess returns.
-
-    Args:
-        strategy_returns: Daily net portfolio return series indexed by trading date.
-        factors_df: Decimal FF5 factor DataFrame containing Mkt-RF, SMB, HML, RMW, CMA, RF.
-        rf_column: Column name for the daily risk-free rate (default 'RF').
-
-    Returns:
-        Tuple (excess_returns, aligned_factors) sharing an exact DatetimeIndex.
-
-    Raises:
-        ValueError: If required FF5 columns are missing or date overlap is empty.
     """
     missing_cols: List[str] = [c for c in FF5_ALL_COLUMNS if c not in factors_df.columns]
     if missing_cols:
@@ -227,23 +186,18 @@ def align_strategy_and_factors(
 
     strat_clean: pd.Series = strategy_returns.copy()
     strat_clean.index = pd.to_datetime(strat_clean.index).tz_localize(None)
-
     fac_clean: pd.DataFrame = factors_df.copy()
     fac_clean.index = pd.to_datetime(fac_clean.index).tz_localize(None)
-
     common_idx: pd.DatetimeIndex = strat_clean.index.intersection(fac_clean.index)
     if len(common_idx) == 0:
         raise ValueError("Zero overlapping trading dates between strategy returns and FF5 factors.")
-
     aligned_strat: pd.Series = strat_clean.loc[common_idx].astype(np.float64)
     aligned_factors: pd.DataFrame = fac_clean.loc[common_idx, list(FF5_ALL_COLUMNS)].astype(
         np.float64
     )
     excess_returns: pd.Series = aligned_strat - aligned_factors[rf_column]
     excess_returns.name = "Excess_Return"
-
     return excess_returns, aligned_factors
-
 
 FF5_REGRESSOR_NAMES: Tuple[str, ...] = ("alpha", "Mkt-RF", "SMB", "HML", "RMW", "CMA")
 
@@ -254,15 +208,11 @@ def build_ff5_regression_matrices(
 ) -> Tuple[FloatArray, FloatArray, pd.DatetimeIndex]:
     """
     Formulates the Fama-French 5-factor multi-factor excess return regression equation
-
-    Sub-issue #209: Aligns strategy net returns with FF5 factors, computes dependent
-    excess return vector y = r_net - RF, and constructs design matrix X = [1, F].
     """
     excess_returns, aligned_factors = align_strategy_and_factors(
         strategy_returns=strategy_returns,
         factors_df=factors_df,
     )
-
     y_vec: FloatArray = excess_returns.to_numpy(dtype=np.float64)
     factor_mat: FloatArray = aligned_factors[list(factor_columns)].to_numpy(dtype=np.float64)
     if not (np.all(np.isfinite(y_vec)) and np.all(np.isfinite(factor_mat))):
@@ -281,12 +231,6 @@ def build_ff5_regression_matrices(
 def recommend_newey_west_lags(n_observations: int) -> int:
     """
     Computes Newey-West (1994) automatic plug-in lag bandwidth floor(4 * (T / 100)^(2/9)).
-
-    Args:
-        n_observations: Number of aligned daily return sessions T.
-
-    Returns:
-        Recommended integer truncation lag L >= 1.
     """
     if n_observations <= 1:
         return 1
@@ -302,44 +246,23 @@ def compute_newey_west_hac_covariance(
     """
     Computes the Newey-West (1987) Heteroskedasticity and Autocorrelation Consistent (HAC)
     parameter covariance matrix using Bartlett kernel weights w_l = 1 - l / (L + 1).
-
-    Sub-issue #211: Accounts for serial correlation and volatility clustering in daily
-    portfolio excess return residuals when computing t-statistics and p-values.
-
-    Args:
-        design_x: 2D regressor matrix X of shape (T, K).
-        residuals: 1D OLS residual vector e of shape (T,).
-        max_lags: Truncation lag L >= 0 (L=0 reduces to White HC0/HC1 covariance).
-        small_sample_adjust: Applies finite-sample degrees-of-freedom factor T / (T - K).
-
-    Returns:
-        Symmetric positive-definite HAC covariance matrix of shape (K, K).
-
-    Raises:
-        ValueError: If max_lags is negative or dimensions of design_x and residuals mismatch.
     """
     if max_lags < 0:
         raise ValueError(f"max_lags must be non-negative, got {max_lags}.")
-
     n_obs, n_params = design_x.shape
     if residuals.shape[0] != n_obs:
         raise ValueError("Row count of design_x must match length of residuals.")
-
     scores: FloatArray = design_x * residuals[:, np.newaxis]
     meat_s: FloatArray = scores.T @ scores
-
     effective_lags: int = min(max_lags, n_obs - 1)
     for lag in range(1, effective_lags + 1):
         bartlett_weight: float = 1.0 - (lag / (effective_lags + 1.0))
         gamma_lag: FloatArray = scores[lag:].T @ scores[:-lag]
         meat_s = meat_s + bartlett_weight * (gamma_lag + gamma_lag.T)
-
     xtx_inv: FloatArray = np.linalg.inv(design_x.T @ design_x)
     cov_hac: FloatArray = xtx_inv @ meat_s @ xtx_inv
-
     if small_sample_adjust and n_obs > n_params:
         cov_hac = cov_hac * (n_obs / float(n_obs - n_params))
-
     return 0.5 * (cov_hac + cov_hac.T)
 
 
@@ -348,11 +271,9 @@ def _two_sided_t_pvalues(t_stats: FloatArray, df_resid: int) -> FloatArray:
     abs_t: FloatArray = np.abs(t_stats)
     try:
         from scipy import stats as scipy_stats  # pylint: disable=import-outside-toplevel
-
         return 2.0 * scipy_stats.t.sf(abs_t, df=df_resid)
     except ImportError:
         from math import erfc, sqrt  # pylint: disable=import-outside-toplevel
-
         return np.array([erfc(float(val) / sqrt(2.0)) for val in abs_t], dtype=np.float64)
 
 
@@ -379,19 +300,6 @@ def estimate_ff5_ols_loadings(
 ) -> OLSFactorSummary:
     """
     Estimates Fama-French 5-factor OLS alpha and factor loadings with Newey-West HAC inference.
-
-    Sub-issue #210: Solves least-squares parameter vector theta = (X^T X)^(-1) X^T y.
-    Sub-issue #211: Applies Newey-West HAC covariance corrections (default max_lags=5) for
-    serial correlation and heteroskedasticity in daily excess return residuals.
-
-    Args:
-        strategy_returns: Daily net portfolio return series indexed by trading date.
-        factors_df: Decimal FF5 factor DataFrame containing Mkt-RF, SMB, HML, RMW, CMA, RF.
-        scheme_name: Human-readable label for the strategy or weighting scheme.
-        hac_max_lags: Newey-West truncation lag L (default 5 trading days).
-
-    Returns:
-        OLSFactorSummary populated with alpha, factor betas, R^2, and HAC t-stats/p-values.
     """
     y_vec, design_x, _ = build_ff5_regression_matrices(
         strategy_returns=strategy_returns,
@@ -400,7 +308,6 @@ def estimate_ff5_ols_loadings(
     n_obs, n_params = design_x.shape
     theta_hat, _, _, _ = np.linalg.lstsq(design_x, y_vec, rcond=None)
     residuals: FloatArray = y_vec - (design_x @ theta_hat)
-
     r_squared, adj_r_squared = _compute_goodness_of_fit(y_vec, residuals, n_params)
     cov_hac: FloatArray = compute_newey_west_hac_covariance(
         design_x=design_x,
@@ -408,10 +315,8 @@ def estimate_ff5_ols_loadings(
         max_lags=hac_max_lags,
         small_sample_adjust=True,
     )
-
     t_stats_vec: FloatArray = theta_hat / np.sqrt(np.maximum(np.diag(cov_hac), 1e-18))
     p_vals_vec: FloatArray = _two_sided_t_pvalues(t_stats_vec, df_resid=n_obs - n_params)
-
     return OLSFactorSummary(
         scheme_name=scheme_name,
         n_observations=n_obs,
@@ -436,19 +341,6 @@ def calculate_annualized_alpha_inference(
 ) -> AlphaInferenceSummary:
     """
     Calculates annualized Fama-French 5-factor strategy alpha and its Newey-West HAC t-statistic.
-
-    Sub-issue #214: Computes arithmetic annualized alpha (252 * alpha_daily), compounded
-    annualized alpha ((1 + alpha_daily)^252 - 1), annualized HAC standard error, 95% CI,
-    and invariant HAC t-statistic t = alpha_daily / SE_HAC(alpha_daily).
-
-    Args:
-        strategy_returns: Daily net portfolio return series indexed by trading date.
-        factors_df: Decimal FF5 factor DataFrame containing Mkt-RF, SMB, HML, RMW, CMA, RF.
-        scheme_name: Human-readable label for the strategy or weighting scheme.
-        hac_max_lags: Newey-West truncation lag L (default 5 trading days).
-
-    Returns:
-        AlphaInferenceSummary containing annualized alpha estimates and HAC t-statistic.
     """
     ols_summary: OLSFactorSummary = estimate_ff5_ols_loadings(
         strategy_returns=strategy_returns,
@@ -456,11 +348,9 @@ def calculate_annualized_alpha_inference(
         scheme_name=scheme_name,
         hac_max_lags=hac_max_lags,
     )
-
     alpha_daily: float = ols_summary.alpha_daily
     alpha_annual: float = alpha_daily * TRADING_DAYS_PER_YEAR
     alpha_compound: float = float((1.0 + alpha_daily) ** TRADING_DAYS_PER_YEAR - 1.0)
-
     if abs(ols_summary.alpha_t_stat) > 1e-15:
         se_daily: float = abs(alpha_daily / ols_summary.alpha_t_stat)
     else:
@@ -472,14 +362,12 @@ def calculate_annualized_alpha_inference(
             max_lags=hac_max_lags,
         )
         se_daily = float(np.sqrt(max(cov_hac[0, 0], 1e-18)))
-
     se_annual: float = se_daily * TRADING_DAYS_PER_YEAR
     margin_95: float = 1.959963984540054 * se_annual
     p_two_sided: float = ols_summary.alpha_p_value
     p_one_sided: float = (
         (0.5 * p_two_sided) if ols_summary.alpha_t_stat >= 0.0 else (1.0 - 0.5 * p_two_sided)
     )
-
     return AlphaInferenceSummary(
         scheme_name=scheme_name,
         n_observations=ols_summary.n_observations,
@@ -507,9 +395,6 @@ def evaluate_alpha_hypothesis_test(
 ) -> Dict[str, object]:
     """
     Evaluates one-sided null hypothesis H0: alpha <= 0 against H1: alpha > 0 using Newey-West HAC.
-
-    Sub-issue #215: Extracts one-sided and two-sided Student-t p-values and returns structured
-    rejection decisions at the requested significance threshold.
     """
     inf: AlphaInferenceSummary = calculate_annualized_alpha_inference(
         strategy_returns=strategy_returns,
@@ -547,19 +432,6 @@ def format_ff5_regression_markdown_table(
     """
     Formats Fama-French 5-factor OLS/HAC regression results into a publication-ready
     GitHub-Flavored Markdown table comparing factor loadings, HAC t-statistics, and R^2.
-
-    Sub-issue #216: Produces clean Markdown summary tables for direct inclusion in
-    docs/attribution.md and Milestone 4 reporting artifacts.
-
-    Args:
-        summaries: Sequence of OLSFactorSummary objects (e.g., Equal-Weight, Convex-Quality).
-        hac_max_lags: Truncation lag L used for Newey-West HAC standard errors.
-
-    Returns:
-        Formatted Markdown string containing the multi-scheme regression table and notes.
-
-    Raises:
-        ValueError: If summaries sequence is empty.
     """
     if not summaries:
         raise ValueError("Cannot format Markdown regression table from an empty summary list.")
@@ -570,7 +442,6 @@ def format_ff5_regression_markdown_table(
         "| " + " | ".join(headers) + " |",
         "| " + " | ".join(alignments) + " |",
     ]
-
     alpha_cells: List[str] = [
         f"{s.alpha_annualized:+.2%}{_significance_stars(s.alpha_p_value)} ({s.alpha_t_stat:+.2f})"
         for s in summaries
@@ -584,7 +455,6 @@ def format_ff5_regression_markdown_table(
     ]
     p_one_label: str = r"| **One-Sided $p$-value ($H_0: \alpha \le 0$)** | "
     lines.append(p_one_label + " | ".join(p_one_cells) + " |")
-
     for factor in FF5_FACTOR_COLUMNS:
         cells: List[str] = [
             f"{s.betas[factor]:+.3f}{_significance_stars(s.p_values[factor])}"
@@ -592,11 +462,9 @@ def format_ff5_regression_markdown_table(
             for s in summaries
         ]
         lines.append(f"| **{factor}** | " + " | ".join(cells) + " |")
-
     r2_cells: List[str] = [f"{s.r_squared:.4f}" for s in summaries]
     adj_r2_cells: List[str] = [f"{s.adj_r_squared:.4f}" for s in summaries]
     n_cells: List[str] = [f"{s.n_observations:,}" for s in summaries]
-
     lines.extend(
         [
             "| **$R^2$** | " + " | ".join(r2_cells) + " |",
@@ -613,10 +481,6 @@ def format_ff5_regression_markdown_table(
 class SyntheticBootstrapEngine:
     """
     Synthetic universe Monte Carlo permutation resampling engine.
-
-    Sub-issue #220: Initializes a cross-sectional equity return pool and active
-    universe count schedule N_t so randomized portfolios replicate the exact
-    time-varying breadth and sparse-universe cash scaling of the Black CEO strategy.
     """
 
     def __init__(
@@ -624,38 +488,24 @@ class SyntheticBootstrapEngine:
         constituent_returns: FloatArray,
         active_counts: np.ndarray,
         dates: Optional[pd.DatetimeIndex] = None,
-        pool_size: int = 500,
     ) -> None:
         """
         Initializes the synthetic universe resampling engine.
-
-        Args:
-            constituent_returns: 2D float64 array of shape (T, M) containing daily
-                returns for M candidate benchmark equities across T trading sessions.
-            active_counts: 1D integer array of shape (T,) giving active Black CEO count N_t.
-            dates: Optional DatetimeIndex of length T matching the trading calendar.
-            pool_size: Number of candidate equities M in the cross-sectional pool.
-
-        Raises:
-            ValueError: If array dimensions are invalid or N_t exceeds pool width M.
         """
         if constituent_returns.ndim != 2:
             raise ValueError("constituent_returns must be a 2D array of shape (T, M).")
-
         n_sessions, n_assets = constituent_returns.shape
         if active_counts.ndim != 1 or active_counts.shape[0] != n_sessions:
             raise ValueError("active_counts must be a 1D array matching session count T.")
-
         if np.any(active_counts < 0) or np.any(active_counts > n_assets):
             raise ValueError(
                 f"active_counts must lie within [0, {n_assets}], got "
                 f"[{int(np.min(active_counts))}, {int(np.max(active_counts))}]."
             )
-
         self.constituent_returns: FloatArray = np.asarray(constituent_returns, dtype=np.float64)
         self.active_counts: np.ndarray = np.asarray(active_counts, dtype=np.int64)
         self.dates: Optional[pd.DatetimeIndex] = dates
-        self.pool_size: int = int(pool_size)
+        self.pool_size: int = int(n_assets)
 
     @property
     def n_sessions(self) -> int:
@@ -670,8 +520,7 @@ class SyntheticBootstrapEngine:
         N_t-stock sampling on every session t.
         """
         budget_t: FloatArray = np.minimum(1.0, self.active_counts / 3.0)
-        pool_mean_t: FloatArray = np.mean(self.constituent_returns, axis=1)
-        return budget_t * pool_mean_t
+        return budget_t * np.mean(self.constituent_returns, axis=1)
 
     def simulate_random_portfolios(
         self,
@@ -680,45 +529,26 @@ class SyntheticBootstrapEngine:
     ) -> FloatArray:
         """
         Generates B randomized equal-weight portfolios matching exact daily active breadth N_t.
-
-        Sub-issue #221: On every trading session t, draws N_t distinct equities uniformly
-        without replacement from the M-stock pool and scales by sparse-universe equity budget
-        B_t = min(1.0, N_t / 3.0).
-
-        Args:
-            n_trials: Number of Monte Carlo permutation trials B (default 10,000).
-            seed: Integer seed or None for numpy Generator initialization.
-
-        Returns:
-            2D float64 array of daily portfolio returns with shape (n_trials, T).
-
-        Raises:
-            ValueError: If n_trials < 1.
         """
         if n_trials < 1:
             raise ValueError(f"n_trials must be >= 1, got {n_trials}.")
-
         rng = np.random.default_rng(seed)
-        n_sessions: int = self.n_sessions
-        n_assets: int = self.pool_size
-        simulated_returns: FloatArray = np.zeros((n_trials, n_sessions), dtype=np.float64)
-
-        unique_counts = np.unique(self.active_counts)
-        for count_k in unique_counts:
+        simulated_returns: FloatArray = np.zeros((n_trials, self.n_sessions), dtype=np.float64)
+        for count_k in np.unique(self.active_counts):
             k_int: int = int(count_k)
             if k_int == 0:
                 continue
-
             session_indices = np.flatnonzero(self.active_counts == k_int)
             budget_k: float = min(1.0, k_int / 3.0)
-            pool_subset: FloatArray = self.constituent_returns[session_indices]  # (T_k, M)
-
-            for idx_offset, t_idx in enumerate(session_indices):
-                random_keys: FloatArray = rng.random((n_trials, n_assets))
-                chosen_cols = np.argpartition(random_keys, kth=k_int - 1, axis=1)[:, :k_int]
-                day_returns: FloatArray = pool_subset[idx_offset, chosen_cols].mean(axis=1)
-                simulated_returns[:, t_idx] = budget_k * day_returns
-
+            for t_idx in session_indices:
+                chosen_cols = np.argpartition(
+                    rng.random((n_trials, self.pool_size)),
+                    kth=k_int - 1,
+                    axis=1,
+                )[:, :k_int]
+                simulated_returns[:, t_idx] = (
+                    budget_k * self.constituent_returns[t_idx, chosen_cols].mean(axis=1)
+                )
         return simulated_returns
 
     @classmethod
@@ -726,25 +556,13 @@ class SyntheticBootstrapEngine:
         cls,
         benchmark_returns: pd.Series,
         active_counts: pd.Series,
-        *,
         pool_size: int = 500,
-        idiosyncratic_vol_daily: float = 0.015,
         seed: int = 42,
     ) -> "SyntheticBootstrapEngine":
         """
         Constructs a calibrated synthetic S&P 500 cross-sectional return pool around an
         observed equal-weight S&P benchmark series (e.g., RSP / SPY) so cross-sectional
         mean returns match the benchmark exactly on every trading day t.
-
-        Args:
-            benchmark_returns: Daily benchmark return series indexed by trading date.
-            active_counts: Daily active constituent count series N_t.
-            pool_size: Number of synthetic S&P constituents M (default 500).
-            idiosyncratic_vol_daily: Daily stock-level idiosyncratic dispersion sigma_eps.
-            seed: Deterministic seed for synthetic cross-section generation.
-
-        Returns:
-            Initialized SyntheticBootstrapEngine instance.
         """
         aligned_df = pd.DataFrame(
             {"bench": benchmark_returns, "n_active": active_counts}
@@ -753,20 +571,13 @@ class SyntheticBootstrapEngine:
         counts_arr: np.ndarray = aligned_df["n_active"].to_numpy(dtype=np.int64)
 
         rng = np.random.default_rng(seed)
-        eps: FloatArray = rng.normal(
-            loc=0.0,
-            scale=idiosyncratic_vol_daily,
-            size=(bench_arr.shape[0], pool_size),
-        )
-        # Zero-center cross-sectional noise each day so cross-sectional mean == bench_arr[t]
+        eps: FloatArray = rng.normal(loc=0.0, scale=0.015, size=(bench_arr.shape[0], pool_size))
         eps -= np.mean(eps, axis=1, keepdims=True)
         pool_matrix: FloatArray = bench_arr[:, np.newaxis] + eps
-
         return cls(
             constituent_returns=pool_matrix,
             active_counts=counts_arr,
             dates=pd.DatetimeIndex(aligned_df.index),
-            pool_size=pool_size,
         )
 
 
