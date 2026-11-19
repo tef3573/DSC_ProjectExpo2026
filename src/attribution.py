@@ -575,14 +575,14 @@ def format_ff5_regression_markdown_table(
         f"{s.alpha_annualized:+.2%}{_significance_stars(s.alpha_p_value)} ({s.alpha_t_stat:+.2f})"
         for s in summaries
     ]
-    alpha_label: str = r"| **Annualized Alpha ($\hat{lpha}_{	ext{ann}}$)** | "
+    alpha_label: str = r"| **Annualized Alpha ($\hat{\alpha}_{\text{ann}}$)** | "
     lines.append(alpha_label + " | ".join(alpha_cells) + " |")
 
     p_one_cells: List[str] = [
         f"{(0.5 * s.alpha_p_value if s.alpha_t_stat >= 0.0 else 1.0 - 0.5 * s.alpha_p_value):.4f}"
         for s in summaries
     ]
-    p_one_label: str = r"| **One-Sided $p$-value ($H_0: lpha \le 0$)** | "
+    p_one_label: str = r"| **One-Sided $p$-value ($H_0: \alpha \le 0$)** | "
     lines.append(p_one_label + " | ".join(p_one_cells) + " |")
 
     for factor in FF5_FACTOR_COLUMNS:
