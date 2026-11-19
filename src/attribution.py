@@ -766,19 +766,14 @@ def compute_annualized_sharpe_array(
 ) -> FloatArray:
     """
     Vectorized annualized Sharpe ratio calculation across (B, T) return paths.
-
-    Sub-issue #226: Evaluates excess return over daily risk-free rate divided by
-    sample standard deviation (ddof=1), scaled by sqrt(periods_per_year).
     """
     arr: FloatArray = np.asarray(returns_matrix, dtype=np.float64)
     if arr.ndim == 1:
         arr = arr[np.newaxis, :]
-
     rf_daily: float = risk_free_annual / float(periods_per_year)
     excess: FloatArray = arr - rf_daily
     mean_excess: FloatArray = np.mean(excess, axis=1)
     std_excess: FloatArray = np.std(excess, axis=1, ddof=1)
-
     sharpes: FloatArray = np.zeros_like(mean_excess, dtype=np.float64)
     valid = std_excess > 1e-15
     sharpes[valid] = (mean_excess[valid] / std_excess[valid]) * np.sqrt(float(periods_per_year))
@@ -806,7 +801,6 @@ def compute_sharpe_percentile_rank(
         risk_free_annual=risk_free_annual,
     )
     percentile_rank: float = float(np.mean(null_sharpes <= observed_sharpe) * 100.0)
-
     return {
         "observed_sharpe": observed_sharpe,
         "null_sharpe_mean": float(np.mean(null_sharpes)),
@@ -814,6 +808,60 @@ def compute_sharpe_percentile_rank(
         "null_sharpe_std": float(np.std(null_sharpes, ddof=1)),
         "sharpe_percentile_rank": percentile_rank,
         "n_trials": float(null_sharpes.shape[0]),
+    }
+
+
+def extract_empirical_bootstrap_p_value(
+    strategy_returns: pd.Series,
+    bootstrap_trials: FloatArray,
+    metric: str = "sharpe",
+    risk_free_annual: float = 0.015,
+) -> Dict[str, float]:
+    """
+    Extracts finite-sample empirical p-values comparing the Black CEO strategy against
+    the synthetic Monte Carlo permutation null distribution.
+    """
+    trials_arr: FloatArray = np.asarray(bootstrap_trials, dtype=np.float64)
+    if trials_arr.ndim != 2 or trials_arr.shape[0] < 1:
+        raise ValueError("bootstrap_trials must be a non-empty 2D array of shape (B, T).")
+    strat_arr: FloatArray = np.asarray(strategy_returns.dropna(), dtype=np.float64)
+    metric_key: str = metric.strip().lower()
+    if metric_key == "sharpe":
+        obs_stat: float = float(
+            compute_annualized_sharpe_array(strat_arr, risk_free_annual=risk_free_annual)[0]
+        )
+        null_stats: FloatArray = compute_annualized_sharpe_array(
+            trials_arr,
+            risk_free_annual=risk_free_annual,
+        )
+    elif metric_key == "cagr":
+        obs_stat = float(
+            np.prod(1.0 + strat_arr) ** (TRADING_DAYS_PER_YEAR / strat_arr.shape[0]) - 1.0
+        )
+        null_stats = (
+            np.prod(1.0 + trials_arr, axis=1)
+            ** (TRADING_DAYS_PER_YEAR / trials_arr.shape[1])
+            - 1.0
+        )
+    else:
+        raise ValueError(f"Unsupported bootstrap metric '{metric}'. Expected 'sharpe' or 'cagr'.")
+    n_trials: int = int(null_stats.shape[0])
+    null_mean: float = float(np.mean(null_stats))
+    right_tail_count: int = int(np.sum(null_stats >= obs_stat))
+    two_sided_count: int = int(
+        np.sum(np.abs(null_stats - null_mean) >= abs(obs_stat - null_mean))
+    )
+    p_right: float = float((1 + right_tail_count) / (n_trials + 1))
+    p_two_sided: float = float((1 + two_sided_count) / (n_trials + 1))
+    return {
+        "observed_stat": obs_stat,
+        "null_mean": null_mean,
+        "null_p025": float(np.percentile(null_stats, 2.5)),
+        "null_p975": float(np.percentile(null_stats, 97.5)),
+        "percentile_rank": float(np.mean(null_stats <= obs_stat) * 100.0),
+        "p_value_right_tailed": p_right,
+        "p_value_two_sided": p_two_sided,
+        "n_trials": float(n_trials),
     }
 
 
