@@ -14,6 +14,9 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import logging
 import warnings
 
+from concurrent.futures import ThreadPoolExecutor
+import os
+
 import numpy as np
 from numpy.typing import NDArray
 import pandas as pd
@@ -684,46 +687,88 @@ class SyntheticBootstrapEngine:
         resolved_seed: int = self.seed if seed is None else int(seed)
         return np.random.Generator(np.random.PCG64(np.random.SeedSequence(resolved_seed)))
 
+    def _simulate_breadth_regime(
+        self,
+        count_k: int,
+        n_trials: int,
+        child_seed: np.random.SeedSequence,
+    ) -> Tuple[np.ndarray, FloatArray]:
+        """
+        Simulates all sessions sharing active constituent count k using an independent
+        spawned SeedSequence stream for thread-safe deterministic reproducibility.
+        """
+        session_indices = np.flatnonzero(self.active_counts == count_k)
+        n_regime_days: int = int(session_indices.shape[0])
+        budget_k: float = min(1.0, count_k / 3.0)
+        pool_subset: FloatArray = self.constituent_returns[session_indices]
+
+        rng = np.random.Generator(np.random.PCG64(child_seed))
+        sampled_idx = rng.integers(
+            low=0,
+            high=self.pool_size,
+            size=(n_regime_days, n_trials, count_k),
+        )
+        picked_returns: FloatArray = np.take_along_axis(
+            pool_subset[:, np.newaxis, :],
+            sampled_idx,
+            axis=2,
+        )
+        regime_returns: FloatArray = budget_k * picked_returns.mean(axis=2).T
+        return session_indices, regime_returns
+
     def simulate_random_portfolios(
         self,
         n_trials: int = 10_000,
         seed: Optional[int] = None,
+        n_jobs: int = -1,
     ) -> FloatArray:
         """
         Generates B randomized equal-weight portfolios matching exact daily active breadth N_t.
 
-        Sub-issues #221 & #222: Uses deterministic SeedSequence RNG initialization and
-        vectorized k-subset sampling across grouped breadth regimes in < 0.5 seconds.
+        Sub-issue #228: Parallelizes independent breadth-regime permutation loops across
+        worker threads using spawned SeedSequence streams so multi-worker execution is
+        bit-for-bit identical to single-threaded execution (n_jobs=1).
+
+        Args:
+            n_trials: Number of Monte Carlo permutation trials B (default 10,000).
+            seed: Optional integer seed overriding self.seed.
+            n_jobs: Worker parallelism (-1 uses available CPU cores, 1 runs sequentially).
+
+        Returns:
+            2D float64 array of daily portfolio returns with shape (n_trials, T).
         """
         if n_trials < 1:
             raise ValueError(f"n_trials must be >= 1, got {n_trials}.")
 
-        rng: np.random.Generator = self.create_rng(seed)
+        resolved_seed: int = self.seed if seed is None else int(seed)
+        non_zero_counts: List[int] = [
+            int(k) for k in np.unique(self.active_counts) if int(k) > 0
+        ]
         simulated_returns: FloatArray = np.zeros((n_trials, self.n_sessions), dtype=np.float64)
+        if not non_zero_counts:
+            return simulated_returns
 
-        for count_k in np.unique(self.active_counts):
-            k_int: int = int(count_k)
-            if k_int == 0:
-                continue
+        child_seeds = np.random.SeedSequence(resolved_seed).spawn(len(non_zero_counts))
+        tasks = list(zip(non_zero_counts, child_seeds))
 
-            session_indices = np.flatnonzero(self.active_counts == k_int)
-            n_regime_days: int = int(session_indices.shape[0])
-            budget_k: float = min(1.0, k_int / 3.0)
-            pool_subset: FloatArray = self.constituent_returns[session_indices]  # (T_k, M)
+        max_workers: int = (
+            max(1, os.cpu_count() or 1) if n_jobs == -1 else max(1, int(n_jobs))
+        )
+        if max_workers == 1 or len(tasks) == 1:
+            results = [
+                self._simulate_breadth_regime(k_val, n_trials, c_seed)
+                for k_val, c_seed in tasks
+            ]
+        else:
+            with ThreadPoolExecutor(max_workers=min(max_workers, len(tasks))) as executor:
+                futures = [
+                    executor.submit(self._simulate_breadth_regime, k_val, n_trials, c_seed)
+                    for k_val, c_seed in tasks
+                ]
+                results = [fut.result() for fut in futures]
 
-            sampled_idx = rng.integers(
-                low=0,
-                high=self.pool_size,
-                size=(n_regime_days, n_trials, k_int),
-            )
-            picked_returns: FloatArray = np.take_along_axis(
-                pool_subset[:, np.newaxis, :],
-                sampled_idx,
-                axis=2,
-            )
-            simulated_returns[:, session_indices] = (
-                budget_k * picked_returns.mean(axis=2).T
-            )
+        for session_indices, regime_returns in results:
+            simulated_returns[:, session_indices] = regime_returns
 
         return simulated_returns
 
