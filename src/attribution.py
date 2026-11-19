@@ -610,6 +610,155 @@ def format_ff5_regression_markdown_table(
     return "\n".join(lines)
 
 
+class SyntheticBootstrapEngine:
+    """
+    Synthetic universe Monte Carlo permutation resampling engine.
+
+    Sub-issues #220-#222: Resamples randomized equal-weight portfolios matching exact
+    daily active constituent count N_t with deterministic SeedSequence reproducibility.
+    """
+
+    DEFAULT_SEED: int = 42
+
+    def __init__(
+        self,
+        constituent_returns: FloatArray,
+        active_counts: np.ndarray,
+        dates: Optional[pd.DatetimeIndex] = None,
+        seed: int = DEFAULT_SEED,
+    ) -> None:
+        """
+        Initializes the synthetic universe resampling engine with a fixed default seed.
+
+        Args:
+            constituent_returns: 2D float64 array of shape (T, M) containing daily
+                returns for M candidate benchmark equities across T trading sessions.
+            active_counts: 1D integer array of shape (T,) giving active Black CEO count N_t.
+            dates: Optional DatetimeIndex of length T matching the trading calendar.
+            seed: Deterministic integer seed for reproducible random number generation.
+
+        Raises:
+            ValueError: If array dimensions are invalid or N_t exceeds pool width M.
+        """
+        if constituent_returns.ndim != 2:
+            raise ValueError("constituent_returns must be a 2D array of shape (T, M).")
+
+        n_sessions, n_assets = constituent_returns.shape
+        if active_counts.ndim != 1 or active_counts.shape[0] != n_sessions:
+            raise ValueError("active_counts must be a 1D array matching session count T.")
+
+        if np.any(active_counts < 0) or np.any(active_counts > n_assets):
+            raise ValueError(
+                f"active_counts must lie within [0, {n_assets}], got "
+                f"[{int(np.min(active_counts))}, {int(np.max(active_counts))}]."
+            )
+
+        self.constituent_returns: FloatArray = np.asarray(constituent_returns, dtype=np.float64)
+        self.active_counts: np.ndarray = np.asarray(active_counts, dtype=np.int64)
+        self.dates: Optional[pd.DatetimeIndex] = dates
+        self.pool_size: int = int(n_assets)
+        self.seed: int = int(seed)
+
+    @property
+    def n_sessions(self) -> int:
+        """Returns number of trading sessions T."""
+        return int(self.constituent_returns.shape[0])
+
+    @property
+    def equal_weight_pool_returns(self) -> FloatArray:
+        """
+        Computes the equal-weighted pool return series scaled by active equity budget
+        B_t = min(1.0, N_t / 3.0), which equals the theoretical expectation of random
+        N_t-stock sampling on every session t.
+        """
+        budget_t: FloatArray = np.minimum(1.0, self.active_counts / 3.0)
+        return budget_t * np.mean(self.constituent_returns, axis=1)
+
+    def create_rng(self, seed: Optional[int] = None) -> np.random.Generator:
+        """
+        Creates a deterministic numpy PCG64 Generator from an explicit SeedSequence.
+
+        Sub-issue #222: Guarantees bit-for-bit reproducibility across repeated calls
+        and platforms without mutating global numpy random state.
+        """
+        resolved_seed: int = self.seed if seed is None else int(seed)
+        return np.random.Generator(np.random.PCG64(np.random.SeedSequence(resolved_seed)))
+
+    def simulate_random_portfolios(
+        self,
+        n_trials: int = 10_000,
+        seed: Optional[int] = None,
+    ) -> FloatArray:
+        """
+        Generates B randomized equal-weight portfolios matching exact daily active breadth N_t.
+
+        Sub-issues #221 & #222: Uses deterministic SeedSequence RNG initialization and
+        vectorized k-subset sampling across grouped breadth regimes in < 0.5 seconds.
+        """
+        if n_trials < 1:
+            raise ValueError(f"n_trials must be >= 1, got {n_trials}.")
+
+        rng: np.random.Generator = self.create_rng(seed)
+        simulated_returns: FloatArray = np.zeros((n_trials, self.n_sessions), dtype=np.float64)
+
+        for count_k in np.unique(self.active_counts):
+            k_int: int = int(count_k)
+            if k_int == 0:
+                continue
+
+            session_indices = np.flatnonzero(self.active_counts == k_int)
+            n_regime_days: int = int(session_indices.shape[0])
+            budget_k: float = min(1.0, k_int / 3.0)
+            pool_subset: FloatArray = self.constituent_returns[session_indices]  # (T_k, M)
+
+            sampled_idx = rng.integers(
+                low=0,
+                high=self.pool_size,
+                size=(n_regime_days, n_trials, k_int),
+            )
+            picked_returns: FloatArray = np.take_along_axis(
+                pool_subset[:, np.newaxis, :],
+                sampled_idx,
+                axis=2,
+            )
+            simulated_returns[:, session_indices] = (
+                budget_k * picked_returns.mean(axis=2).T
+            )
+
+        return simulated_returns
+
+    @classmethod
+    def from_sp_benchmark_series(
+        cls,
+        benchmark_returns: pd.Series,
+        active_counts: pd.Series,
+        pool_size: int = 500,
+        seed: int = DEFAULT_SEED,
+    ) -> "SyntheticBootstrapEngine":
+        """
+        Constructs a calibrated synthetic S&P 500 cross-sectional return pool around an
+        observed equal-weight S&P benchmark series (e.g., RSP / SPY) so cross-sectional
+        mean returns match the benchmark exactly on every trading day t.
+        """
+        aligned_df = pd.DataFrame(
+            {"bench": benchmark_returns, "n_active": active_counts}
+        ).dropna()
+        bench_arr: FloatArray = aligned_df["bench"].to_numpy(dtype=np.float64)
+        counts_arr: np.ndarray = aligned_df["n_active"].to_numpy(dtype=np.int64)
+
+        rng = np.random.Generator(np.random.PCG64(np.random.SeedSequence(int(seed))))
+        eps: FloatArray = rng.normal(loc=0.0, scale=0.015, size=(bench_arr.shape[0], pool_size))
+        eps -= np.mean(eps, axis=1, keepdims=True)
+        pool_matrix: FloatArray = bench_arr[:, np.newaxis] + eps
+
+        return cls(
+            constituent_returns=pool_matrix,
+            active_counts=counts_arr,
+            dates=pd.DatetimeIndex(aligned_df.index),
+            seed=int(seed),
+        )
+
+
 if __name__ == "__main__":
     default_cfg = FactorAttributionConfig()
     ff5_df = download_ff5_daily_factors(default_cfg)

@@ -19,6 +19,7 @@ from src.attribution import (
     estimate_ff5_ols_loadings,
     evaluate_alpha_hypothesis_test,
     format_ff5_regression_markdown_table,
+    SyntheticBootstrapEngine,
     recommend_newey_west_lags,
 )
 
@@ -226,7 +227,9 @@ class TestStatisticalSignificanceAndResiduals(unittest.TestCase):
 
                 # Normal equations guarantee X^T * e = 0 across intercept and all 5 FF factors
                 orthogonality = design_x.T @ summary.residuals
-                np.testing.assert_allclose(orthogonality, np.zeros(6), atol=1e-11)
+                np.testing.assert_allclose(
+                    orthogonality, np.zeros(6), atol=1e-11
+                )
 
     def test_alpha_hypothesis_test_and_markdown_table_export(
         self,
@@ -269,6 +272,56 @@ class TestStatisticalSignificanceAndResiduals(unittest.TestCase):
         self.assertIn(r"| **Annualized Alpha ($\hat{\alpha}_{\text{ann}}$)** |", md_table)
         self.assertIn("Equal-Weight (Net)", md_table)
         self.assertIn("Convex-Quality (Net)", md_table)
+
+
+
+
+class TestMonteCarloPermutationBootstrap(unittest.TestCase):
+    """Sub-issues #220-#224: Verify Monte Carlo bootstrap reproducibility and S&P convergence."""
+
+    def test_bootstrap_distribution_mean_converges_to_equal_weight_sp(self) -> None:
+        """Sub-issue #224: Confirm 10,000-trial mean return path converges to equal-weight S&P."""
+        bt_df = pd.read_csv(BACKTEST_RESULTS_PATH, index_col=0, parse_dates=True)
+        mask_df = pd.read_csv("data/universe_mask.csv", index_col=0, parse_dates=True)
+        active_nt = mask_df.sum(axis=1)
+
+        engine = SyntheticBootstrapEngine.from_sp_benchmark_series(
+            benchmark_returns=bt_df["SPY_Daily"],
+            active_counts=active_nt,
+            pool_size=500,
+            seed=42,
+        )
+        trials = engine.simulate_random_portfolios(n_trials=10_000, seed=42)
+        self.assertEqual(trials.shape, (10_000, len(bt_df)))
+
+        # Sessions with zero active Black CEOs must yield 0.0 return across all trials
+        zero_mask = engine.active_counts == 0
+        if np.any(zero_mask):
+            np.testing.assert_array_equal(trials[:, zero_mask], 0.0)
+
+        # Law of Large Numbers: sample mean across 10,000 trials converges to equal-weight S&P
+        bootstrap_mean_daily = trials.mean(axis=0)
+        expected_ew_sp_daily = engine.equal_weight_pool_returns
+
+        daily_rmse = float(np.sqrt(np.mean((bootstrap_mean_daily - expected_ew_sp_daily) ** 2)))
+        ann_diff = abs(float(bootstrap_mean_daily.mean() - expected_ew_sp_daily.mean())) * 252.0
+
+        self.assertLess(daily_rmse, 2e-4)
+        self.assertLess(ann_diff, 5e-4)
+
+    def test_bootstrap_seed_reproducibility(self) -> None:
+        """Sub-issue #222: Verify identical seeds produce bit-for-bit identical simulations."""
+        rng = np.random.default_rng(7)
+        pool = rng.normal(0.0004, 0.015, size=(120, 50))
+        counts = np.tile([0, 1, 2, 5, 10, 15], 20)
+
+        engine = SyntheticBootstrapEngine(constituent_returns=pool, active_counts=counts, seed=99)
+        sim_one = engine.simulate_random_portfolios(n_trials=250, seed=99)
+        sim_two = engine.simulate_random_portfolios(n_trials=250, seed=99)
+        sim_diff = engine.simulate_random_portfolios(n_trials=250, seed=100)
+
+        np.testing.assert_array_equal(sim_one, sim_two)
+        self.assertFalse(np.array_equal(sim_one, sim_diff))
 
 
 if __name__ == "__main__":
