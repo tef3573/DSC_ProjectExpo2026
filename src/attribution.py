@@ -69,7 +69,7 @@ class OLSFactorSummary:  # pylint: disable=too-many-instance-attributes
 
 @dataclass
 class AlphaInferenceSummary:  # pylint: disable=too-many-instance-attributes
-    """Container for annualized strategy alpha, HAC standard error, and t-statistic inference."""
+    """Container for annualized strategy alpha, HAC standard error, and hypothesis p-values."""
 
     scheme_name: str
     n_observations: int
@@ -79,6 +79,10 @@ class AlphaInferenceSummary:  # pylint: disable=too-many-instance-attributes
     alpha_compounded: float
     alpha_hac_se_annual: float
     alpha_t_stat: float
+    p_value_two_sided: float
+    p_value_one_sided_gt_zero: float
+    reject_null_at_5pct: bool
+    reject_null_at_10pct: bool
     ci_95_lower_annual: float
     ci_95_upper_annual: float
 
@@ -471,6 +475,9 @@ def calculate_annualized_alpha_inference(
 
     se_annual: float = se_daily * TRADING_DAYS_PER_YEAR
     margin_95: float = 1.959963984540054 * se_annual
+    t_stat: float = ols_summary.alpha_t_stat
+    p_two_sided: float = ols_summary.alpha_p_value
+    p_one_sided: float = (0.5 * p_two_sided) if t_stat >= 0.0 else (1.0 - 0.5 * p_two_sided)
 
     return AlphaInferenceSummary(
         scheme_name=scheme_name,
@@ -480,10 +487,45 @@ def calculate_annualized_alpha_inference(
         alpha_annualized=alpha_annual,
         alpha_compounded=alpha_compound,
         alpha_hac_se_annual=se_annual,
-        alpha_t_stat=ols_summary.alpha_t_stat,
+        alpha_t_stat=t_stat,
+        p_value_two_sided=p_two_sided,
+        p_value_one_sided_gt_zero=p_one_sided,
+        reject_null_at_5pct=bool(p_one_sided < 0.05),
+        reject_null_at_10pct=bool(p_one_sided < 0.10),
         ci_95_lower_annual=alpha_annual - margin_95,
         ci_95_upper_annual=alpha_annual + margin_95,
     )
+
+
+def evaluate_alpha_hypothesis_test(
+    strategy_returns: pd.Series,
+    factors_df: pd.DataFrame,
+    scheme_name: str = "Strategy",
+    hac_max_lags: int = 5,
+    significance_level: float = 0.05,
+) -> Dict[str, object]:
+    """
+    Evaluates one-sided null hypothesis H0: alpha <= 0 against H1: alpha > 0 using Newey-West HAC.
+
+    Sub-issue #215: Extracts one-sided and two-sided Student-t p-values and returns structured
+    rejection decisions at the requested significance threshold.
+    """
+    inf: AlphaInferenceSummary = calculate_annualized_alpha_inference(
+        strategy_returns=strategy_returns,
+        factors_df=factors_df,
+        scheme_name=scheme_name,
+        hac_max_lags=hac_max_lags,
+    )
+    return {
+        "scheme_name": inf.scheme_name,
+        "hac_max_lags": inf.hac_max_lags,
+        "alpha_annualized": inf.alpha_annualized,
+        "alpha_t_stat": inf.alpha_t_stat,
+        "p_value_one_sided_gt_zero": inf.p_value_one_sided_gt_zero,
+        "p_value_two_sided": inf.p_value_two_sided,
+        "significance_level": significance_level,
+        "reject_h0_alpha_lte_zero": bool(inf.p_value_one_sided_gt_zero < significance_level),
+    }
 
 
 if __name__ == "__main__":
