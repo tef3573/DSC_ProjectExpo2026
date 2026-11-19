@@ -68,6 +68,22 @@ class OLSFactorSummary:  # pylint: disable=too-many-instance-attributes
 
 
 @dataclass
+class AlphaInferenceSummary:  # pylint: disable=too-many-instance-attributes
+    """Container for annualized strategy alpha, HAC standard error, and t-statistic inference."""
+
+    scheme_name: str
+    n_observations: int
+    hac_max_lags: int
+    alpha_daily: float
+    alpha_annualized: float
+    alpha_compounded: float
+    alpha_hac_se_annual: float
+    alpha_t_stat: float
+    ci_95_lower_annual: float
+    ci_95_upper_annual: float
+
+
+@dataclass
 class PermutationTestSummary:  # pylint: disable=too-many-instance-attributes
     """Container for Monte Carlo block/residual permutation robustness results."""
 
@@ -405,6 +421,68 @@ def estimate_ff5_ols_loadings(
         t_stats={name: float(t_stats_vec[i]) for i, name in enumerate(FF5_REGRESSOR_NAMES)},
         p_values={name: float(p_vals_vec[i]) for i, name in enumerate(FF5_REGRESSOR_NAMES)},
         residuals=residuals,
+    )
+
+
+def calculate_annualized_alpha_inference(
+    strategy_returns: pd.Series,
+    factors_df: pd.DataFrame,
+    scheme_name: str = "Strategy",
+    hac_max_lags: int = 5,
+) -> AlphaInferenceSummary:
+    """
+    Calculates annualized Fama-French 5-factor strategy alpha and its Newey-West HAC t-statistic.
+
+    Sub-issue #214: Computes arithmetic annualized alpha (252 * alpha_daily), compounded
+    annualized alpha ((1 + alpha_daily)^252 - 1), annualized HAC standard error, 95% CI,
+    and invariant HAC t-statistic t = alpha_daily / SE_HAC(alpha_daily).
+
+    Args:
+        strategy_returns: Daily net portfolio return series indexed by trading date.
+        factors_df: Decimal FF5 factor DataFrame containing Mkt-RF, SMB, HML, RMW, CMA, RF.
+        scheme_name: Human-readable label for the strategy or weighting scheme.
+        hac_max_lags: Newey-West truncation lag L (default 5 trading days).
+
+    Returns:
+        AlphaInferenceSummary containing annualized alpha estimates and HAC t-statistic.
+    """
+    ols_summary: OLSFactorSummary = estimate_ff5_ols_loadings(
+        strategy_returns=strategy_returns,
+        factors_df=factors_df,
+        scheme_name=scheme_name,
+        hac_max_lags=hac_max_lags,
+    )
+
+    alpha_daily: float = ols_summary.alpha_daily
+    alpha_annual: float = alpha_daily * TRADING_DAYS_PER_YEAR
+    alpha_compound: float = float((1.0 + alpha_daily) ** TRADING_DAYS_PER_YEAR - 1.0)
+
+    if abs(ols_summary.alpha_t_stat) > 1e-15:
+        se_daily: float = abs(alpha_daily / ols_summary.alpha_t_stat)
+    else:
+        _, design_x, _ = build_ff5_regression_matrices(strategy_returns, factors_df)
+        assert ols_summary.residuals is not None
+        cov_hac = compute_newey_west_hac_covariance(
+            design_x=design_x,
+            residuals=ols_summary.residuals,
+            max_lags=hac_max_lags,
+        )
+        se_daily = float(np.sqrt(max(cov_hac[0, 0], 1e-18)))
+
+    se_annual: float = se_daily * TRADING_DAYS_PER_YEAR
+    margin_95: float = 1.959963984540054 * se_annual
+
+    return AlphaInferenceSummary(
+        scheme_name=scheme_name,
+        n_observations=ols_summary.n_observations,
+        hac_max_lags=hac_max_lags,
+        alpha_daily=alpha_daily,
+        alpha_annualized=alpha_annual,
+        alpha_compounded=alpha_compound,
+        alpha_hac_se_annual=se_annual,
+        alpha_t_stat=ols_summary.alpha_t_stat,
+        ci_95_lower_annual=alpha_annual - margin_95,
+        ci_95_upper_annual=alpha_annual + margin_95,
     )
 
 
