@@ -759,6 +759,64 @@ class SyntheticBootstrapEngine:
         )
 
 
+def compute_annualized_sharpe_array(
+    returns_matrix: FloatArray,
+    risk_free_annual: float = 0.015,
+    periods_per_year: int = TRADING_DAYS_PER_YEAR,
+) -> FloatArray:
+    """
+    Vectorized annualized Sharpe ratio calculation across (B, T) return paths.
+
+    Sub-issue #226: Evaluates excess return over daily risk-free rate divided by
+    sample standard deviation (ddof=1), scaled by sqrt(periods_per_year).
+    """
+    arr: FloatArray = np.asarray(returns_matrix, dtype=np.float64)
+    if arr.ndim == 1:
+        arr = arr[np.newaxis, :]
+
+    rf_daily: float = risk_free_annual / float(periods_per_year)
+    excess: FloatArray = arr - rf_daily
+    mean_excess: FloatArray = np.mean(excess, axis=1)
+    std_excess: FloatArray = np.std(excess, axis=1, ddof=1)
+
+    sharpes: FloatArray = np.zeros_like(mean_excess, dtype=np.float64)
+    valid = std_excess > 1e-15
+    sharpes[valid] = (mean_excess[valid] / std_excess[valid]) * np.sqrt(float(periods_per_year))
+    return sharpes
+
+
+def compute_sharpe_percentile_rank(
+    strategy_returns: pd.Series,
+    bootstrap_trials: FloatArray,
+    risk_free_annual: float = 0.015,
+) -> Dict[str, float]:
+    """
+    Computes the empirical percentile rank of the Black CEO portfolio's Sharpe ratio
+    against the synthetic Monte Carlo null Sharpe distribution.
+
+    Sub-issue #226: Returns observed Sharpe, null distribution mean/median/std, and
+    empirical percentile rank in [0.0, 100.0].
+    """
+    strat_arr: FloatArray = np.asarray(strategy_returns.dropna(), dtype=np.float64)
+    observed_sharpe: float = float(
+        compute_annualized_sharpe_array(strat_arr, risk_free_annual=risk_free_annual)[0]
+    )
+    null_sharpes: FloatArray = compute_annualized_sharpe_array(
+        bootstrap_trials,
+        risk_free_annual=risk_free_annual,
+    )
+    percentile_rank: float = float(np.mean(null_sharpes <= observed_sharpe) * 100.0)
+
+    return {
+        "observed_sharpe": observed_sharpe,
+        "null_sharpe_mean": float(np.mean(null_sharpes)),
+        "null_sharpe_median": float(np.median(null_sharpes)),
+        "null_sharpe_std": float(np.std(null_sharpes, ddof=1)),
+        "sharpe_percentile_rank": percentile_rank,
+        "n_trials": float(null_sharpes.shape[0]),
+    }
+
+
 if __name__ == "__main__":
     default_cfg = FactorAttributionConfig()
     ff5_df = download_ff5_daily_factors(default_cfg)
