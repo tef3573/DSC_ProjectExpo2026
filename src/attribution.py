@@ -673,11 +673,60 @@ class SyntheticBootstrapEngine:
         pool_mean_t: FloatArray = np.mean(self.constituent_returns, axis=1)
         return budget_t * pool_mean_t
 
+    def simulate_random_portfolios(
+        self,
+        n_trials: int = 10_000,
+        seed: Optional[int] = 42,
+    ) -> FloatArray:
+        """
+        Generates B randomized equal-weight portfolios matching exact daily active breadth N_t.
+
+        Sub-issue #221: On every trading session t, draws N_t distinct equities uniformly
+        without replacement from the M-stock pool and scales by sparse-universe equity budget
+        B_t = min(1.0, N_t / 3.0).
+
+        Args:
+            n_trials: Number of Monte Carlo permutation trials B (default 10,000).
+            seed: Integer seed or None for numpy Generator initialization.
+
+        Returns:
+            2D float64 array of daily portfolio returns with shape (n_trials, T).
+
+        Raises:
+            ValueError: If n_trials < 1.
+        """
+        if n_trials < 1:
+            raise ValueError(f"n_trials must be >= 1, got {n_trials}.")
+
+        rng = np.random.default_rng(seed)
+        n_sessions: int = self.n_sessions
+        n_assets: int = self.pool_size
+        simulated_returns: FloatArray = np.zeros((n_trials, n_sessions), dtype=np.float64)
+
+        unique_counts = np.unique(self.active_counts)
+        for count_k in unique_counts:
+            k_int: int = int(count_k)
+            if k_int == 0:
+                continue
+
+            session_indices = np.flatnonzero(self.active_counts == k_int)
+            budget_k: float = min(1.0, k_int / 3.0)
+            pool_subset: FloatArray = self.constituent_returns[session_indices]  # (T_k, M)
+
+            for idx_offset, t_idx in enumerate(session_indices):
+                random_keys: FloatArray = rng.random((n_trials, n_assets))
+                chosen_cols = np.argpartition(random_keys, kth=k_int - 1, axis=1)[:, :k_int]
+                day_returns: FloatArray = pool_subset[idx_offset, chosen_cols].mean(axis=1)
+                simulated_returns[:, t_idx] = budget_k * day_returns
+
+        return simulated_returns
+
     @classmethod
     def from_sp_benchmark_series(
         cls,
         benchmark_returns: pd.Series,
         active_counts: pd.Series,
+        *,
         pool_size: int = 500,
         idiosyncratic_vol_daily: float = 0.015,
         seed: int = 42,
