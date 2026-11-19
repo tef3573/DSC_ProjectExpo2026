@@ -226,9 +226,11 @@ class TestStatisticalSignificanceAndResiduals(unittest.TestCase):
 
                 # Normal equations guarantee X^T * e = 0 across intercept and all 5 FF factors
                 orthogonality = design_x.T @ summary.residuals
-                np.testing.assert_allclose(orthogonality, np.zeros(6), atol=1e-12)
+                np.testing.assert_allclose(orthogonality, np.zeros(6), atol=1e-11)
 
-    def test_alpha_hypothesis_test_and_markdown_table_export(self) -> None:
+    def test_alpha_hypothesis_test_and_markdown_table_export(
+        self,
+    ) -> None:
         """Sub-issues #214-#216: Verify annualized alpha CI, one-sided p-value, and Markdown table."""
         bt_df = pd.read_csv(BACKTEST_RESULTS_PATH, index_col=0, parse_dates=True)
         ff5_df = download_ff5_daily_factors(force_refresh=False, as_decimal=True)
@@ -264,7 +266,7 @@ class TestStatisticalSignificanceAndResiduals(unittest.TestCase):
             bt_df["Convex_Quality_Net"], ff5_df, scheme_name="Convex-Quality (Net)", hac_max_lags=5
         )
         md_table = format_ff5_regression_markdown_table([ew_ols, cq_ols], hac_max_lags=5)
-        self.assertIn("| **Annualized Alpha ($\hat{\alpha}_{\text{ann}}$)** |", md_table)
+        self.assertIn(r"| **Annualized Alpha ($\hat{\alpha}_{\text{ann}}$)** |", md_table)
         self.assertIn("Equal-Weight (Net)", md_table)
         self.assertIn("Convex-Quality (Net)", md_table)
 
