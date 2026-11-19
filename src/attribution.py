@@ -475,9 +475,10 @@ def calculate_annualized_alpha_inference(
 
     se_annual: float = se_daily * TRADING_DAYS_PER_YEAR
     margin_95: float = 1.959963984540054 * se_annual
-    t_stat: float = ols_summary.alpha_t_stat
     p_two_sided: float = ols_summary.alpha_p_value
-    p_one_sided: float = (0.5 * p_two_sided) if t_stat >= 0.0 else (1.0 - 0.5 * p_two_sided)
+    p_one_sided: float = (
+        (0.5 * p_two_sided) if ols_summary.alpha_t_stat >= 0.0 else (1.0 - 0.5 * p_two_sided)
+    )
 
     return AlphaInferenceSummary(
         scheme_name=scheme_name,
@@ -487,7 +488,7 @@ def calculate_annualized_alpha_inference(
         alpha_annualized=alpha_annual,
         alpha_compounded=alpha_compound,
         alpha_hac_se_annual=se_annual,
-        alpha_t_stat=t_stat,
+        alpha_t_stat=ols_summary.alpha_t_stat,
         p_value_two_sided=p_two_sided,
         p_value_one_sided_gt_zero=p_one_sided,
         reject_null_at_5pct=bool(p_one_sided < 0.05),
@@ -526,6 +527,84 @@ def evaluate_alpha_hypothesis_test(
         "significance_level": significance_level,
         "reject_h0_alpha_lte_zero": bool(inf.p_value_one_sided_gt_zero < significance_level),
     }
+
+
+def _significance_stars(p_value: float) -> str:
+    """Returns standard academic significance stars for two-sided p-values."""
+    if p_value < 0.01:
+        return "***"
+    if p_value < 0.05:
+        return "**"
+    if p_value < 0.10:
+        return "*"
+    return ""
+
+
+def format_ff5_regression_markdown_table(
+    summaries: Sequence[OLSFactorSummary],
+    hac_max_lags: int = 5,
+) -> str:
+    """
+    Formats Fama-French 5-factor OLS/HAC regression results into a publication-ready
+    GitHub-Flavored Markdown table comparing factor loadings, HAC t-statistics, and R^2.
+
+    Sub-issue #216: Produces clean Markdown summary tables for direct inclusion in
+    docs/attribution.md and Milestone 4 reporting artifacts.
+
+    Args:
+        summaries: Sequence of OLSFactorSummary objects (e.g., Equal-Weight, Convex-Quality).
+        hac_max_lags: Truncation lag L used for Newey-West HAC standard errors.
+
+    Returns:
+        Formatted Markdown string containing the multi-scheme regression table and notes.
+
+    Raises:
+        ValueError: If summaries sequence is empty.
+    """
+    if not summaries:
+        raise ValueError("Cannot format Markdown regression table from an empty summary list.")
+
+    headers: List[str] = ["Parameter / Metric"] + [s.scheme_name for s in summaries]
+    alignments: List[str] = [":---"] + [":---:" for _ in summaries]
+    lines: List[str] = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join(alignments) + " |",
+    ]
+
+    alpha_cells: List[str] = [
+        f"{s.alpha_annualized:+.2%}{_significance_stars(s.alpha_p_value)} ({s.alpha_t_stat:+.2f})"
+        for s in summaries
+    ]
+    lines.append("| **Annualized Alpha ($\hat{\alpha}_{\text{ann}}$)** | " + " | ".join(alpha_cells) + " |")
+
+    p_one_cells: List[str] = [
+        f"{(0.5 * s.alpha_p_value if s.alpha_t_stat >= 0.0 else 1.0 - 0.5 * s.alpha_p_value):.4f}"
+        for s in summaries
+    ]
+    lines.append("| **One-Sided $p$-value ($H_0: \alpha \le 0$)** | " + " | ".join(p_one_cells) + " |")
+
+    for factor in FF5_FACTOR_COLUMNS:
+        cells: List[str] = [
+            f"{s.betas[factor]:+.3f}{_significance_stars(s.p_values[factor])} ({s.t_stats[factor]:+.2f})"
+            for s in summaries
+        ]
+        lines.append(f"| **{factor}** | " + " | ".join(cells) + " |")
+
+    r2_cells: List[str] = [f"{s.r_squared:.4f}" for s in summaries]
+    adj_r2_cells: List[str] = [f"{s.adj_r_squared:.4f}" for s in summaries]
+    n_cells: List[str] = [f"{s.n_observations:,}" for s in summaries]
+
+    lines.extend(
+        [
+            "| **$R^2$** | " + " | ".join(r2_cells) + " |",
+            "| **Adjusted $R^2$** | " + " | ".join(adj_r2_cells) + " |",
+            "| **Aligned Sessions ($T$)** | " + " | ".join(n_cells) + " |",
+            "",
+            f"*Note: Newey-West HAC $t$-statistics ($L = {hac_max_lags}$) shown in parentheses. "
+            "Two-sided significance: `*` $p < 0.10$, `**` $p < 0.05$, `***` $p < 0.01$.*",
+        ]
+    )
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
