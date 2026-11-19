@@ -20,6 +20,9 @@ from src.attribution import (
     evaluate_alpha_hypothesis_test,
     format_ff5_regression_markdown_table,
     SyntheticBootstrapEngine,
+    compute_annualized_sharpe_array,
+    compute_sharpe_percentile_rank,
+    extract_empirical_bootstrap_p_value,
     recommend_newey_west_lags,
 )
 
@@ -227,9 +230,7 @@ class TestStatisticalSignificanceAndResiduals(unittest.TestCase):
 
                 # Normal equations guarantee X^T * e = 0 across intercept and all 5 FF factors
                 orthogonality = design_x.T @ summary.residuals
-                np.testing.assert_allclose(
-                    orthogonality, np.zeros(6), atol=1e-11
-                )
+                np.testing.assert_allclose(orthogonality, np.zeros(6), atol=1e-11)
 
     def test_alpha_hypothesis_test_and_markdown_table_export(
         self,
@@ -322,6 +323,70 @@ class TestMonteCarloPermutationBootstrap(unittest.TestCase):
 
         np.testing.assert_array_equal(sim_one, sim_two)
         self.assertFalse(np.array_equal(sim_one, sim_diff))
+
+    def test_parallel_and_sequential_simulation_parity(self) -> None:
+        """Sub-issue #228: Confirm multi-worker and sequential simulations match bit-for-bit."""
+        rng = np.random.default_rng(11)
+        pool = rng.normal(0.0003, 0.012, size=(150, 40))
+        counts = np.tile([0, 1, 2, 4, 8], 30)
+
+        engine = SyntheticBootstrapEngine(constituent_returns=pool, active_counts=counts, seed=17)
+        par_res = engine.simulate_random_portfolios(n_trials=300, seed=17, n_jobs=-1)
+        seq_res = engine.simulate_random_portfolios(n_trials=300, seed=17, n_jobs=1)
+        np.testing.assert_array_equal(par_res, seq_res)
+
+    def test_distribution_percentiles_match_two_tailed_bounds(self) -> None:
+        """Sub-issues #226, #227 & #230: Verify percentile ranks and two-tailed 95% bounds."""
+        bt_df = pd.read_csv(BACKTEST_RESULTS_PATH, index_col=0, parse_dates=True)
+        mask_df = pd.read_csv("data/universe_mask.csv", index_col=0, parse_dates=True)
+
+        engine = SyntheticBootstrapEngine.from_sp_benchmark_series(
+            benchmark_returns=bt_df["SPY_Daily"],
+            active_counts=mask_df.sum(axis=1),
+            pool_size=500,
+            seed=42,
+        )
+        trials = engine.simulate_random_portfolios(n_trials=10_000, seed=42, n_jobs=-1)
+
+        sharpe_rank = compute_sharpe_percentile_rank(
+            bt_df["Black_CEO_Net"], trials, risk_free_annual=0.015
+        )
+        sharpe_pval = extract_empirical_bootstrap_p_value(
+            bt_df["Black_CEO_Net"], trials, metric="sharpe", risk_free_annual=0.015
+        )
+        cagr_pval = extract_empirical_bootstrap_p_value(
+            bt_df["Black_CEO_Net"], trials, metric="cagr"
+        )
+
+        # Verify percentile rank consistency between #226 and #227
+        self.assertAlmostEqual(
+            sharpe_rank["sharpe_percentile_rank"],
+            sharpe_pval["percentile_rank"],
+            places=10,
+        )
+
+        # Verify two-tailed 2.5th and 97.5th percentile bounds enclose ~95% of null draws
+        null_sharpes = compute_annualized_sharpe_array(trials, risk_free_annual=0.015)
+        expected_p025, expected_p975 = np.percentile(null_sharpes, [2.5, 97.5])
+        self.assertAlmostEqual(sharpe_pval["null_p025"], float(expected_p025), places=12)
+        self.assertAlmostEqual(sharpe_pval["null_p975"], float(expected_p975), places=12)
+
+        inside_ratio = float(
+            np.mean(
+                (null_sharpes >= sharpe_pval["null_p025"])
+                & (null_sharpes <= sharpe_pval["null_p975"])
+            )
+        )
+        self.assertAlmostEqual(inside_ratio, 0.95, delta=0.005)
+
+        # Observed Sharpe sits inside two-tailed 95% bounds -> two-sided p > 0.05
+        self.assertGreater(sharpe_pval["observed_stat"], sharpe_pval["null_p025"])
+        self.assertLess(sharpe_pval["observed_stat"], sharpe_pval["null_p975"])
+        self.assertGreater(sharpe_pval["p_value_two_sided"], 0.05)
+
+        # Observed CAGR sits above 97.5th percentile bound -> two-sided p < 0.05
+        self.assertGreater(cagr_pval["observed_stat"], cagr_pval["null_p975"])
+        self.assertLess(cagr_pval["p_value_two_sided"], 0.05)
 
 
 if __name__ == "__main__":

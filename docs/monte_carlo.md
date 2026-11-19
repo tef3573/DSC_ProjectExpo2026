@@ -58,3 +58,28 @@ By the Law of Large Numbers, as $B \to \infty$ ($B = 10,000$), the sample mean p
 | **Bootstrap Distribution Mean CAGR** | **7.78%** |
 | **Bootstrap 95th Percentile CAGR** | **10.90%** |
 | **Observed Black CEO Net CAGR** | **13.36%** |
+
+---
+
+## 5. Empirical $p$-Value Extraction & Expo Judge Interpretation
+
+### 5.1 Finite-Sample Permutation $p$-Value Estimator
+To avoid parametric normality assumptions on concentrated equity returns, `extract_empirical_bootstrap_p_value()` (`src/attribution.py`) evaluates the observed strategy statistic $\theta_{\text{obs}}$ against the $B = 10,000$ synthetic null realizations $\{\theta^{(1)}, \dots, \theta^{(B)}\}$ using the Davison-Hinkley finite-sample permutation estimator:
+
+$$
+\hat{p}_{\text{right}} = \frac{1 + \sum_{b=1}^{B} \mathbb{I}\!\left(\theta^{(b)} \ge \theta_{\text{obs}}\right)}{B + 1}, \qquad \hat{p}_{\text{two-sided}} = \frac{1 + \sum_{b=1}^{B} \mathbb{I}\!\left(\left|\theta^{(b)} - \bar{\theta}_{\text{null}}\right| \ge \left|\theta_{\text{obs}} - \bar{\theta}_{\text{null}}\right|\right)}{B + 1}
+$$
+
+* **Why $(1 + \text{count}) / (B + 1)$:** Adding $1$ to both numerator and denominator treats the observed strategy as one realization under the exchangeability null, preventing artificial $p = 0$ claims when $\theta_{\text{obs}}$ ranks at the extreme right tail while bounding resolution at $(10,001)^{-1} \approx 0.0001$.
+* **Two-Tailed 95% Null Bounds:** Defined by the empirical $2.5\text{th}$ and $97.5\text{th}$ percentiles ($q_{0.025}, q_{0.975}$) of the synthetic null distribution.
+
+### 5.2 Empirical Results (`2000-01-03` to `2026-11-18`, $B = 10,000$)
+
+| Metric | Observed Strategy (Net) | Null Mean | Two-Tailed 95% Null Bounds | Percentile Rank | Right-Tailed $p$-value | Two-Sided $p$-value |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **CAGR** | **13.36%** | 7.78% | `[4.14%, 11.56%]` | **99.83%** | **0.0018** | **0.0035** |
+| **Sharpe Ratio ($R_f = 1.5\%$)** | **0.4452** | 0.3873 | `[0.2264, 0.5497]` | **75.48%** | **0.2453** | **0.4894** |
+
+### 5.3 Plain-English Summary for Expo Judges
+1. **Compound Growth Outperformance ($p = 0.0018$):** Out of **10,000** randomized portfolios subjected to the exact same historical CEO headcount ($N_t$) and cash buffer rules, **99.83%** generated a lower compound annual growth rate than the Black CEO portfolio (`13.36%` vs. `7.78%` null mean). Only **17 out of 10,000** random draws matched or exceeded `13.36%`, rejecting pure luck at the $1\%$ significance level.
+2. **Risk-Adjusted Efficiency Trade-Off ($p = 0.2453$):** Because holding an average of $8$ companies introduces idiosyncratic volatility (`42.08%` vs. `19.24%` for `SPY`), the strategy's `0.45` Sharpe ratio places in the **upper quartile (75.5th percentile)** of breadth-matched random portfolios—confirming solid risk-adjusted execution while transparently showing that volatility compression (addressed by our `Convex-Quality` optimizer) is key to converting raw return edge into higher Sharpe significance.
