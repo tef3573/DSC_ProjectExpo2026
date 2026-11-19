@@ -14,6 +14,9 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import logging
 import warnings
 
+from concurrent.futures import ThreadPoolExecutor
+import os
+
 import numpy as np
 from numpy.typing import NDArray
 import pandas as pd
@@ -684,46 +687,88 @@ class SyntheticBootstrapEngine:
         resolved_seed: int = self.seed if seed is None else int(seed)
         return np.random.Generator(np.random.PCG64(np.random.SeedSequence(resolved_seed)))
 
+    def _simulate_breadth_regime(
+        self,
+        count_k: int,
+        n_trials: int,
+        child_seed: np.random.SeedSequence,
+    ) -> Tuple[np.ndarray, FloatArray]:
+        """
+        Simulates all sessions sharing active constituent count k using an independent
+        spawned SeedSequence stream for thread-safe deterministic reproducibility.
+        """
+        session_indices = np.flatnonzero(self.active_counts == count_k)
+        n_regime_days: int = int(session_indices.shape[0])
+        budget_k: float = min(1.0, count_k / 3.0)
+        pool_subset: FloatArray = self.constituent_returns[session_indices]
+
+        rng = np.random.Generator(np.random.PCG64(child_seed))
+        sampled_idx = rng.integers(
+            low=0,
+            high=self.pool_size,
+            size=(n_regime_days, n_trials, count_k),
+        )
+        picked_returns: FloatArray = np.take_along_axis(
+            pool_subset[:, np.newaxis, :],
+            sampled_idx,
+            axis=2,
+        )
+        regime_returns: FloatArray = budget_k * picked_returns.mean(axis=2).T
+        return session_indices, regime_returns
+
     def simulate_random_portfolios(
         self,
         n_trials: int = 10_000,
         seed: Optional[int] = None,
+        n_jobs: int = -1,
     ) -> FloatArray:
         """
         Generates B randomized equal-weight portfolios matching exact daily active breadth N_t.
 
-        Sub-issues #221 & #222: Uses deterministic SeedSequence RNG initialization and
-        vectorized k-subset sampling across grouped breadth regimes in < 0.5 seconds.
+        Sub-issue #228: Parallelizes independent breadth-regime permutation loops across
+        worker threads using spawned SeedSequence streams so multi-worker execution is
+        bit-for-bit identical to single-threaded execution (n_jobs=1).
+
+        Args:
+            n_trials: Number of Monte Carlo permutation trials B (default 10,000).
+            seed: Optional integer seed overriding self.seed.
+            n_jobs: Worker parallelism (-1 uses available CPU cores, 1 runs sequentially).
+
+        Returns:
+            2D float64 array of daily portfolio returns with shape (n_trials, T).
         """
         if n_trials < 1:
             raise ValueError(f"n_trials must be >= 1, got {n_trials}.")
 
-        rng: np.random.Generator = self.create_rng(seed)
+        resolved_seed: int = self.seed if seed is None else int(seed)
+        non_zero_counts: List[int] = [
+            int(k) for k in np.unique(self.active_counts) if int(k) > 0
+        ]
         simulated_returns: FloatArray = np.zeros((n_trials, self.n_sessions), dtype=np.float64)
+        if not non_zero_counts:
+            return simulated_returns
 
-        for count_k in np.unique(self.active_counts):
-            k_int: int = int(count_k)
-            if k_int == 0:
-                continue
+        child_seeds = np.random.SeedSequence(resolved_seed).spawn(len(non_zero_counts))
+        tasks = list(zip(non_zero_counts, child_seeds))
 
-            session_indices = np.flatnonzero(self.active_counts == k_int)
-            n_regime_days: int = int(session_indices.shape[0])
-            budget_k: float = min(1.0, k_int / 3.0)
-            pool_subset: FloatArray = self.constituent_returns[session_indices]  # (T_k, M)
+        max_workers: int = (
+            max(1, os.cpu_count() or 1) if n_jobs == -1 else max(1, int(n_jobs))
+        )
+        if max_workers == 1 or len(tasks) == 1:
+            results = [
+                self._simulate_breadth_regime(k_val, n_trials, c_seed)
+                for k_val, c_seed in tasks
+            ]
+        else:
+            with ThreadPoolExecutor(max_workers=min(max_workers, len(tasks))) as executor:
+                futures = [
+                    executor.submit(self._simulate_breadth_regime, k_val, n_trials, c_seed)
+                    for k_val, c_seed in tasks
+                ]
+                results = [fut.result() for fut in futures]
 
-            sampled_idx = rng.integers(
-                low=0,
-                high=self.pool_size,
-                size=(n_regime_days, n_trials, k_int),
-            )
-            picked_returns: FloatArray = np.take_along_axis(
-                pool_subset[:, np.newaxis, :],
-                sampled_idx,
-                axis=2,
-            )
-            simulated_returns[:, session_indices] = (
-                budget_k * picked_returns.mean(axis=2).T
-            )
+        for session_indices, regime_returns in results:
+            simulated_returns[:, session_indices] = regime_returns
 
         return simulated_returns
 
@@ -757,6 +802,112 @@ class SyntheticBootstrapEngine:
             dates=pd.DatetimeIndex(aligned_df.index),
             seed=int(seed),
         )
+
+
+def compute_annualized_sharpe_array(
+    returns_matrix: FloatArray,
+    risk_free_annual: float = 0.015,
+    periods_per_year: int = TRADING_DAYS_PER_YEAR,
+) -> FloatArray:
+    """
+    Vectorized annualized Sharpe ratio calculation across (B, T) return paths.
+    """
+    arr: FloatArray = np.asarray(returns_matrix, dtype=np.float64)
+    if arr.ndim == 1:
+        arr = arr[np.newaxis, :]
+    rf_daily: float = risk_free_annual / float(periods_per_year)
+    excess: FloatArray = arr - rf_daily
+    mean_excess: FloatArray = np.mean(excess, axis=1)
+    std_excess: FloatArray = np.std(excess, axis=1, ddof=1)
+    sharpes: FloatArray = np.zeros_like(mean_excess, dtype=np.float64)
+    valid = std_excess > 1e-15
+    sharpes[valid] = (mean_excess[valid] / std_excess[valid]) * np.sqrt(float(periods_per_year))
+    return sharpes
+
+
+def compute_sharpe_percentile_rank(
+    strategy_returns: pd.Series,
+    bootstrap_trials: FloatArray,
+    risk_free_annual: float = 0.015,
+) -> Dict[str, float]:
+    """
+    Computes the empirical percentile rank of the Black CEO portfolio's Sharpe ratio
+    against the synthetic Monte Carlo null Sharpe distribution.
+
+    Sub-issue #226: Returns observed Sharpe, null distribution mean/median/std, and
+    empirical percentile rank in [0.0, 100.0].
+    """
+    strat_arr: FloatArray = np.asarray(strategy_returns.dropna(), dtype=np.float64)
+    observed_sharpe: float = float(
+        compute_annualized_sharpe_array(strat_arr, risk_free_annual=risk_free_annual)[0]
+    )
+    null_sharpes: FloatArray = compute_annualized_sharpe_array(
+        bootstrap_trials,
+        risk_free_annual=risk_free_annual,
+    )
+    percentile_rank: float = float(np.mean(null_sharpes <= observed_sharpe) * 100.0)
+    return {
+        "observed_sharpe": observed_sharpe,
+        "null_sharpe_mean": float(np.mean(null_sharpes)),
+        "null_sharpe_median": float(np.median(null_sharpes)),
+        "null_sharpe_std": float(np.std(null_sharpes, ddof=1)),
+        "sharpe_percentile_rank": percentile_rank,
+        "n_trials": float(null_sharpes.shape[0]),
+    }
+
+
+def extract_empirical_bootstrap_p_value(
+    strategy_returns: pd.Series,
+    bootstrap_trials: FloatArray,
+    metric: str = "sharpe",
+    risk_free_annual: float = 0.015,
+) -> Dict[str, float]:
+    """
+    Extracts finite-sample empirical p-values comparing the Black CEO strategy against
+    the synthetic Monte Carlo permutation null distribution.
+    """
+    trials_arr: FloatArray = np.asarray(bootstrap_trials, dtype=np.float64)
+    if trials_arr.ndim != 2 or trials_arr.shape[0] < 1:
+        raise ValueError("bootstrap_trials must be a non-empty 2D array of shape (B, T).")
+    strat_arr: FloatArray = np.asarray(strategy_returns.dropna(), dtype=np.float64)
+    metric_key: str = metric.strip().lower()
+    if metric_key == "sharpe":
+        obs_stat: float = float(
+            compute_annualized_sharpe_array(strat_arr, risk_free_annual=risk_free_annual)[0]
+        )
+        null_stats: FloatArray = compute_annualized_sharpe_array(
+            trials_arr,
+            risk_free_annual=risk_free_annual,
+        )
+    elif metric_key == "cagr":
+        obs_stat = float(
+            np.prod(1.0 + strat_arr) ** (TRADING_DAYS_PER_YEAR / strat_arr.shape[0]) - 1.0
+        )
+        null_stats = (
+            np.prod(1.0 + trials_arr, axis=1)
+            ** (TRADING_DAYS_PER_YEAR / trials_arr.shape[1])
+            - 1.0
+        )
+    else:
+        raise ValueError(f"Unsupported bootstrap metric '{metric}'. Expected 'sharpe' or 'cagr'.")
+    n_trials: int = int(null_stats.shape[0])
+    null_mean: float = float(np.mean(null_stats))
+    right_tail_count: int = int(np.sum(null_stats >= obs_stat))
+    two_sided_count: int = int(
+        np.sum(np.abs(null_stats - null_mean) >= abs(obs_stat - null_mean))
+    )
+    p_right: float = float((1 + right_tail_count) / (n_trials + 1))
+    p_two_sided: float = float((1 + two_sided_count) / (n_trials + 1))
+    return {
+        "observed_stat": obs_stat,
+        "null_mean": null_mean,
+        "null_p025": float(np.percentile(null_stats, 2.5)),
+        "null_p975": float(np.percentile(null_stats, 97.5)),
+        "percentile_rank": float(np.mean(null_stats <= obs_stat) * 100.0),
+        "p_value_right_tailed": p_right,
+        "p_value_two_sided": p_two_sided,
+        "n_trials": float(n_trials),
+    }
 
 
 if __name__ == "__main__":
