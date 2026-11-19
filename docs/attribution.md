@@ -75,3 +75,29 @@ L^* = \left\lfloor 4 \left(\frac{T}{100}\right)^{2/9} \right\rfloor
 $$
 
 For our aligned sample of $T = 6,726$ trading sessions, $L^* = \lfloor 4 (67.26)^{2/9} \rfloor = 10$ trading days (two trading weeks), providing a secondary robustness benchmark against the $L = 5$ baseline.
+
+---
+
+## 5. Empirical Alpha & Hypothesis Testing Verdict (#214–#217)
+
+### 5.1 Full-Horizon Fama-French 5-Factor Attribution (`2000-01-03` to `2026-09-30`, $T = 6,726$)
+
+| Parameter / Metric | Equal-Weight (Net) | Convex-Quality (Net) |
+| :--- | :---: | :---: |
+| **Annualized Alpha ($\hat{\alpha}_{\text{ann}}$)** | +10.52% (+1.51) | +3.28% (+0.66) |
+| **One-Sided $p$-value ($H_0: \alpha \le 0$)** | 0.0661 | 0.2553 |
+| **Mkt-RF** | +0.889*** (+23.08) | +0.930*** (+48.56) |
+| **SMB** | +0.415*** (+5.91) | +0.147*** (+3.15) |
+| **HML** | +0.285*** (+5.57) | +0.214*** (+4.49) |
+| **RMW** | -0.175** (-2.24) | -0.101** (-2.04) |
+| **CMA** | -0.111* (-1.78) | +0.082 (+1.38) |
+| **$R^2$** | 0.2189 | 0.3788 |
+| **Adjusted $R^2$** | 0.2183 | 0.3783 |
+| **Aligned Sessions ($T$)** | 6,726 | 6,726 |
+
+*Note: Newey-West HAC $t$-statistics ($L = 5$) shown in parentheses. Two-sided significance: `*` $p < 0.10$, `**` $p < 0.05$, `***` $p < 0.01$.*
+
+### 5.2 Formal Hypothesis Test Verdict ($H_0: \alpha \le 0$ vs. $H_1: \alpha > 0$)
+1. **Failure to Reject $H_0$ at the Institutional 5% Level:** Neither the Equal-Weight strategy ($t_{\text{HAC}} = +1.51$, one-sided $p = 0.0661$ at $L = 5$; $t_{\text{HAC}} = +1.51$, $p = 0.0654$ at plug-in $L^* = 10$) nor the risk-controlled Convex-Quality portfolio ($t_{\text{HAC}} = +0.66$, one-sided $p = 0.2553$ at $L = 5$; $t_{\text{HAC}} = +0.68$, $p = 0.2477$ at $L^* = 10$) achieves statistical significance at the standard $\alpha_{\text{sig}} = 0.05$ threshold.
+2. **Factor Exposure Decomposition:** A substantial share of the raw excess return reported in single-factor CAPM benchmarks is explained by systematic size and value tilts—specifically positive small-cap exposure ($\beta_{\text{SMB}} = +0.415$, $t = +5.91$ for Equal-Weight; $\beta_{\text{SMB}} = +0.147$, $t = +3.15$ for Convex-Quality) and value exposure ($\beta_{\text{HML}} = +0.285$, $t = +5.57$ and $+0.214$, $t = +4.49$, respectively), alongside negative profitability loadings ($\beta_{\text{RMW}} < 0$).
+3. **Economic vs. Statistical Significance:** While point-estimate annualized alpha remains positive across both schemes ($+10.52\%$ Equal-Weight; $+3.28\%$ Convex-Quality), high idiosyncratic residual variance across a concentrated $N_t \le 17$ corporate leadership universe limits statistical power over a 26.7-year sample. Consequently, the empirical evidence supports **risk-adjusted factor parity rather than statistically significant standalone abnormal alpha** at the 95% confidence level.
