@@ -11,6 +11,7 @@ Milestone 4: Factor Attribution & Robustness
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
+import json
 import logging
 import warnings
 
@@ -991,6 +992,102 @@ def export_factor_loadings_csv(
     loadings_df.to_csv(output_path, index=False)
     logging.info("Sub-issue #232: Exported FF5 factor loadings to %s", output_path)
     return loadings_df
+
+
+def _summarize_bootstrap_metric(
+    strategy_returns: pd.Series,
+    bootstrap_trials: FloatArray,
+    metric: str,
+    risk_free_annual: float = 0.015,
+) -> Dict[str, object]:
+    """Builds full percentile ladder and empirical p-value summary for one bootstrap metric."""
+    inference: Dict[str, float] = extract_empirical_bootstrap_p_value(
+        strategy_returns=strategy_returns,
+        bootstrap_trials=bootstrap_trials,
+        metric=metric,
+        risk_free_annual=risk_free_annual,
+    )
+    strat_arr: FloatArray = np.asarray(strategy_returns.dropna(), dtype=np.float64)
+    if metric == "sharpe":
+        null_dist: FloatArray = compute_annualized_sharpe_array(
+            bootstrap_trials,
+            risk_free_annual=risk_free_annual,
+        )
+    else:
+        null_dist = (
+            np.prod(1.0 + bootstrap_trials, axis=1)
+            ** (TRADING_DAYS_PER_YEAR / bootstrap_trials.shape[1])
+            - 1.0
+        )
+
+    pct_keys = (1.0, 2.5, 5.0, 10.0, 25.0, 50.0, 75.0, 90.0, 95.0, 97.5, 99.0)
+    percentiles: Dict[str, float] = {
+        f"p{str(q).replace('.', '_')}": float(np.percentile(null_dist, q))
+        for q in pct_keys
+    }
+    return {
+        "observed": inference["observed_stat"],
+        "null_mean": inference["null_mean"],
+        "null_std": float(np.std(null_dist, ddof=1)),
+        "percentile_rank": inference["percentile_rank"],
+        "p_value_right_tailed": inference["p_value_right_tailed"],
+        "p_value_two_sided": inference["p_value_two_sided"],
+        "two_tailed_95_bounds": [inference["null_p025"], inference["null_p975"]],
+        "percentiles": percentiles,
+        "n_sessions": int(strat_arr.shape[0]),
+    }
+
+
+def export_mc_results_json(
+    strategy_series_map: Dict[str, pd.Series],
+    bootstrap_trials: FloatArray,
+    output_path: Path = DATA_DIR / "mc_results.json",
+    seed: int = SyntheticBootstrapEngine.DEFAULT_SEED,
+    risk_free_annual: float = 0.015,
+) -> Dict[str, object]:
+    """
+    Exports Monte Carlo bootstrap distribution percentiles, confidence bounds, and
+    empirical p-values to data/mc_results.json.
+
+    Sub-issue #233: Generates structured JSON artifacts for statistical auditing and
+    Milestone 5 interactive Expo distribution visualizations.
+    """
+    if not strategy_series_map:
+        raise ValueError("strategy_series_map must contain at least one strategy return series.")
+
+    payload: Dict[str, object] = {
+        "metadata": {
+            "n_trials": int(bootstrap_trials.shape[0]),
+            "n_sessions": int(bootstrap_trials.shape[1]),
+            "seed": int(seed),
+            "risk_free_annual": float(risk_free_annual),
+            "p_value_estimator": "(1 + count) / (B + 1)",
+        },
+        "strategies": {},
+    }
+
+    strategies_dict: Dict[str, object] = {}
+    for scheme_label, ret_series in strategy_series_map.items():
+        strategies_dict[scheme_label] = {
+            "sharpe": _summarize_bootstrap_metric(
+                ret_series,
+                bootstrap_trials,
+                metric="sharpe",
+                risk_free_annual=risk_free_annual,
+            ),
+            "cagr": _summarize_bootstrap_metric(
+                ret_series,
+                bootstrap_trials,
+                metric="cagr",
+                risk_free_annual=risk_free_annual,
+            ),
+        }
+
+    payload["strategies"] = strategies_dict
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    logging.info("Sub-issue #233: Exported Monte Carlo results to %s", output_path)
+    return payload
 
 
 if __name__ == "__main__":
