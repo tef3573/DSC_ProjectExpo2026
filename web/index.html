@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    name="description"
+    content="Quantitative risk-adjusted empirical backtest (2000–2026) evaluating publicly traded U.S. firms led by Black CEOs against SPY and RSP."
+  />
+  <title>Black CEO Alpha Backtest (2000–2026) | Quantitative Research Terminal</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="vendor/plotly.min.js" defer></script>
+  <script src="js/charts.js" defer></script>
+  <script src="js/dashboard.js" defer></script>
+</head>
+<body>
+  <header class="topbar" role="banner">
+    <div class="topbar__inner">
+      <div class="topbar__title-group">
+        <span class="badge badge--live">EMPIRICAL STUDY &bull; 2000–2026 (6,763 SESSIONS)</span>
+        <h1>Black CEO Leadership &amp; Risk-Adjusted Equity Performance</h1>
+        <p class="topbar__subtitle">
+          Survivorship-Bias-Free Point-in-Time Backtest &bull; Fama-French 5-Factor HAC Attribution &bull; GARCH(1,1) Regime Diagnostics
+        </p>
+      </div>
+      <nav class="topbar__controls" aria-label="Dashboard controls">
+        <label class="control-group" for="strategy-select">
+          <span class="control-label">Portfolio Weighting</span>
+          <select id="strategy-select" class="select-input">
+            <option value="Black_CEO_Net" selected>Black CEO Equal-Weight (Net, 10 bps)</option>
+            <option value="Convex_Quality_Net">Black CEO Convex-Quality QP (Net, 10 bps)</option>
+            <option value="Vol_Targeted_Net">GARCH(1,1) Vol-Targeted Overlay (20% Target)</option>
+          </select>
+        </label>
+        <label class="control-group" for="regime-select">
+          <span class="control-label">Macro &amp; Structural Regime</span>
+          <select id="regime-select" class="select-input">
+            <option value="full_horizon" selected>Full Horizon (2000–2026)</option>
+            <option value="post_2010">Post-2010 Modern Universe (2010–2026)</option>
+            <option value="pre_2010">Pre-2010 Sparse Universe (2000–2009)</option>
+            <option value="dot_com_bust">Dot-Com Bust &amp; 2001 Recession</option>
+            <option value="gfc_2008">Global Financial Crisis (2007–2009)</option>
+            <option value="zirp_qe_era">ZIRP &amp; QE Expansion (2009–2020)</option>
+            <option value="covid_shock_stimulus">COVID-19 Shock &amp; Stimulus (2020–2021)</option>
+            <option value="inflation_rate_hikes">2022–2023 Inflation &amp; Rate-Hike Cycle</option>
+            <option value="ai_high_rate_regime">AI &amp; High-Rate Regime (2023–2026)</option>
+          </select>
+        </label>
+      </nav>
+    </div>
+  </header>
+
+  <main class="dashboard-shell" id="main-content">
+    <!-- Row 1: Executive KPI Strip -->
+    <section class="kpi-grid" aria-label="Key Performance Indicators">
+      <article class="kpi-card">
+        <span class="kpi-card__label">Net CAGR (2000–2026)</span>
+        <strong class="kpi-card__value kpi-card__value--positive" id="kpi-cagr">13.35%</strong>
+        <span class="kpi-card__delta" id="kpi-cagr-delta">+551 bps vs. SPY (7.84%)</span>
+      </article>
+      <article class="kpi-card">
+        <span class="kpi-card__label">Cumulative Wealth Multiple</span>
+        <strong class="kpi-card__value" id="kpi-wealth">28.89&times;</strong>
+        <span class="kpi-card__delta" id="kpi-wealth-delta">$10k &rarr; $288.9k net of 10 bps</span>
+      </article>
+      <article class="kpi-card">
+        <span class="kpi-card__label">Jensen&rsquo;s Alpha (FF5 HAC)</span>
+        <strong class="kpi-card__value kpi-card__value--accent" id="kpi-alpha">+11.31%</strong>
+        <span class="kpi-card__delta" id="kpi-alpha-delta">Sortino 0.84 &bull; Sharpe 0.45</span>
+      </article>
+      <article class="kpi-card">
+        <span class="kpi-card__label">Maximum Drawdown</span>
+        <strong class="kpi-card__value kpi-card__value--warning" id="kpi-mdd">72.69%</strong>
+        <span class="kpi-card__delta" id="kpi-mdd-delta">GARCH Overlay MDD: 51.11%</span>
+      </article>
+      <article class="kpi-card">
+        <span class="kpi-card__label">GARCH(1,1) Persistence</span>
+        <strong class="kpi-card__value" id="kpi-garch">0.9833</strong>
+        <span class="kpi-card__delta" id="kpi-garch-delta">Half-Life: 41.2d (Post-2010: 11.1d)</span>
+      </article>
+    </section>
+
+    <!-- Row 2: Primary Cumulative Wealth & Underwater Drawdown Charts -->
+    <section class="panel-grid panel-grid--primary" aria-label="Equity Curve and Drawdown Analytics">
+      <article class="panel-card panel-card--wide">
+        <header class="panel-card__header">
+          <div>
+            <h2>Cumulative Growth of $10,000 (Log / Linear Scale)</h2>
+            <p class="panel-card__meta">Net of 10 bps transaction friction &amp; strict t+1 tenure execution lag</p>
+          </div>
+          <div class="pill-switch" role="group" aria-label="Y-axis scale toggle">
+            <button type="button" class="pill-btn pill-btn--active" data-scale="log">Log Scale</button>
+            <button type="button" class="pill-btn" data-scale="linear">Linear Scale</button>
+          </div>
+        </header>
+        <div id="chart-equity-curve" class="chart-stage" role="img" aria-label="Cumulative equity curve chart"></div>
+      </article>
+
+      <article class="panel-card">
+        <header class="panel-card__header">
+          <div>
+            <h2>Underwater Drawdown Profile</h2>
+            <p class="panel-card__meta">Peak-to-trough drawdown depth across macro crises</p>
+          </div>
+        </header>
+        <div id="chart-drawdown" class="chart-stage" role="img" aria-label="Underwater drawdown chart"></div>
+      </article>
+    </section>
+
+    <!-- Row 3: Constituent Breadth & Monte Carlo / Factor Attribution -->
+    <section class="panel-grid panel-grid--secondary" aria-label="Universe Breadth and Econometric Diagnostics">
+      <article class="panel-card">
+        <header class="panel-card__header">
+          <div>
+            <h2>Active Black CEO Universe Breadth (N<sub>t</sub>)</h2>
+            <p class="panel-card__meta">Point-in-time constituent count (0 to 17 tickers) with concentration guardrails</p>
+          </div>
+        </header>
+        <div id="chart-constituent-count" class="chart-stage chart-stage--compact" role="img" aria-label="Active constituent breadth chart"></div>
+      </article>
+
+      <article class="panel-card">
+        <header class="panel-card__header">
+          <div>
+            <h2>Macro Event Regime Attribution (2000–2026)</h2>
+            <p class="panel-card__meta">Windowed return, max drawdown, recovery duration &amp; SPY downside capture</p>
+          </div>
+        </header>
+        <div class="table-scroll">
+          <table class="data-table" id="macro-regime-table">
+            <thead>
+              <tr>
+                <th>Macro Regime</th>
+                <th>N<sub>t</sub> Range</th>
+                <th>Strategy Cum.</th>
+                <th>SPY Cum.</th>
+                <th>Max DD</th>
+                <th>Recovery</th>
+                <th>Down Capture</th>
+              </tr>
+            </thead>
+            <tbody id="macro-regime-tbody">
+              <tr>
+                <td>Dot-Com Bust &amp; 2001 Recession</td>
+                <td>4–5</td>
+                <td class="num num--pos">+12.36%</td>
+                <td class="num num--neg">-42.64%</td>
+                <td class="num">33.37%</td>
+                <td class="num">59d</td>
+                <td class="num">0.80&times;</td>
+              </tr>
+              <tr>
+                <td>Global Financial Crisis</td>
+                <td>5–5</td>
+                <td class="num num--neg">-67.75%</td>
+                <td class="num num--neg">-54.77%</td>
+                <td class="num">68.17%</td>
+                <td class="num">Unrec.</td>
+                <td class="num">0.99&times;</td>
+              </tr>
+              <tr>
+                <td>ZIRP &amp; Quantitative Easing Era</td>
+                <td>4–10</td>
+                <td class="num num--pos">+1,002.23%</td>
+                <td class="num num--pos">+520.77%</td>
+                <td class="num">53.21%</td>
+                <td class="num">491d</td>
+                <td class="num">0.90&times;</td>
+              </tr>
+              <tr>
+                <td>COVID-19 Shock &amp; Stimulus Surge</td>
+                <td>9–12</td>
+                <td class="num num--pos">+171.42%</td>
+                <td class="num num--pos">+44.91%</td>
+                <td class="num">46.98%</td>
+                <td class="num">61d</td>
+                <td class="num">1.28&times;</td>
+              </tr>
+              <tr>
+                <td>2022–2023 Inflation &amp; Rate-Hike Cycle</td>
+                <td>11–16</td>
+                <td class="num num--neg">-19.95%</td>
+                <td class="num num--neg">-11.16%</td>
+                <td class="num">26.89%</td>
+                <td class="num">Unrec.</td>
+                <td class="num">1.22&times;</td>
+              </tr>
+              <tr>
+                <td>AI &amp; High-Rate Regime</td>
+                <td>0–17</td>
+                <td class="num num--pos">+110.37%</td>
+                <td class="num num--pos">+74.17%</td>
+                <td class="num">17.65%</td>
+                <td class="num">95d</td>
+                <td class="num">0.79&times;</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <!-- Row 4: Institutional Scorecard & Time-Series Diagnostics -->
+    <section class="panel-grid panel-grid--tertiary" aria-label="Institutional Performance Scorecard">
+      <article class="panel-card">
+        <header class="panel-card__header">
+          <div>
+            <h2>Institutional Performance &amp; Volatility Scorecard</h2>
+            <p class="panel-card__meta">Full-horizon comparison across Strategy, SPY, RSP, and GARCH Vol-Targeted Overlay</p>
+          </div>
+        </header>
+        <div class="table-scroll">
+          <table class="data-table" id="scorecard-table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Black CEO (Net)</th>
+                <th>GARCH Vol-Target (20%)</th>
+                <th>SPY (Cap-Wtd)</th>
+                <th>RSP (Eq-Wtd)*</th>
+              </tr>
+            </thead>
+            <tbody id="scorecard-tbody">
+              <tr>
+                <td>Annualized Return (CAGR)</td>
+                <td class="num num--pos">13.35%</td>
+                <td class="num num--pos">9.49%</td>
+                <td class="num">7.84%</td>
+                <td class="num">11.01%</td>
+              </tr>
+              <tr>
+                <td>Annualized Volatility</td>
+                <td class="num">42.08%</td>
+                <td class="num num--pos">19.93%</td>
+                <td class="num">19.25%</td>
+                <td class="num">19.69%</td>
+              </tr>
+              <tr>
+                <td>Sharpe Ratio (R<sub>f</sub> = 1.5%)</td>
+                <td class="num">0.45</td>
+                <td class="num num--pos">0.48</td>
+                <td class="num">0.41</td>
+                <td class="num">0.55</td>
+              </tr>
+              <tr>
+                <td>Maximum Drawdown (MDD)</td>
+                <td class="num">72.69%</td>
+                <td class="num num--pos">51.11%</td>
+                <td class="num">55.19%</td>
+                <td class="num">59.92%</td>
+              </tr>
+              <tr>
+                <td>GARCH(1,1) Persistence (&alpha; + &beta;)</td>
+                <td class="num">0.9833</td>
+                <td class="num">0.9833</td>
+                <td class="num">0.9805</td>
+                <td class="num">&mdash;</td>
+              </tr>
+              <tr>
+                <td>ARIMA(1,0,1) Walk-Forward OOS R<sup>2</sup></td>
+                <td class="num">-0.06%</td>
+                <td class="num">&mdash;</td>
+                <td class="num">&mdash;</td>
+                <td class="num">&mdash;</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <footer class="footer" role="contentinfo">
+    <div class="footer__inner">
+      <p>
+        <strong>Methodology &amp; Governance:</strong> Point-in-time CEO tenure roster (32 issuers, including delisted JCP &amp; acquired QRTEA), strict <em>t+1</em> execution lag, 10 bps round-trip friction, and Newey-West HAC standard errors.
+      </p>
+      <p class="footer__note">DSC Project Expo 2026 &bull; Quantitative Finance &amp; Risk Analytics</p>
+    </div>
+  </footer>
+</body>
+</html>

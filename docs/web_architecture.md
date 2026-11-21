@@ -4,6 +4,25 @@
 
 The **Black CEO Portfolio Backtest** visualization pipeline decouples quantitative compute (`src/backtest.py`, `src/attribution.py`, `src/bootstrap.py`) from interactive presentation (`src/charts.py`, `notebook/01_interactive_visualizations.ipynb`, and `web/`). Rather than executing live optimizations or 10,000-trial bootstraps on page load, the pipeline pre-computes deterministic Plotly JSON figure specifications stored in `data/charts/`.
 
+
+## 1. Directory Structure
+The static web application lives inside `web/` and is designed for zero-backend static deployment (GitHub Pages or local Python `http.server`) with offline-capable Plotly rendering:
+
+```text
+web/
+├── index.html                  # Semantic HTML5 institutional dashboard & ARIA-labeled layout
+├── css/
+│   └── style.css               # Dark-mode financial terminal CSS Grid & widescreen projector rules
+├── js/
+│   ├── dashboard.js            # Data hydration, strategy/regime selector state & table rendering
+│   └── charts.js               # Plotly.js figure mounting, log/linear toggle & ResizeObserver
+├── vendor/
+│   └── plotly.min.js           # Local offline Plotly.js bundle (no external CDN dependency)
+└── data/
+    └── summary_metrics.json    # Static JSON artifact synced from data/summary_metrics.json
+```
+
+
 ## 2. Artifact & Data Flow
 
 ```text
