@@ -362,5 +362,7 @@ if __name__ == "__main__":
     print(f"Exported underwater drawdown figure JSON to {dd_out}")
 
     breadth_fig = build_active_constituent_count_figure()
-    breadth_out = export_figure_json(breadth_fig, CHARTS_OUTPUT_DIR / "active_constituent_count.json")
+    breadth_out = export_figure_json(
+        breadth_fig, CHARTS_OUTPUT_DIR / "active_constituent_count.json"
+    )
     print(f"Exported active constituent count figure JSON to {breadth_out}")
