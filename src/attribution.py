@@ -910,6 +910,89 @@ def extract_empirical_bootstrap_p_value(
     }
 
 
+def export_factor_loadings_csv(
+    summaries: Sequence[OLSFactorSummary],
+    output_path: Path = DATA_DIR / "factor_loadings.csv",
+    hac_max_lags: int = 5,
+) -> pd.DataFrame:
+    """
+    Exports Fama-French 5-Factor OLS regression coefficients, Newey-West HAC
+    t-statistics, p-values, and fit diagnostics to data/factor_loadings.csv.
+
+    Sub-issue #232: Produces a normalized tabular artifact ready for downstream
+    reporting and Milestone 5 interactive dashboard visualization.
+
+    Args:
+        summaries: Sequence of fitted OLSFactorSummary objects across schemes.
+        output_path: Destination CSV path (default: data/factor_loadings.csv).
+        hac_max_lags: Newey-West HAC lag truncation parameter L recorded in table.
+
+    Returns:
+        DataFrame written to output_path.
+    """
+    if not summaries:
+        raise ValueError("summaries must contain at least one OLSFactorSummary.")
+
+    rows: List[Dict[str, object]] = []
+    for summary in summaries:
+        one_sided_alpha_p: float = (
+            0.5 * summary.alpha_p_value
+            if summary.alpha_t_stat >= 0.0
+            else 1.0 - 0.5 * summary.alpha_p_value
+        )
+        rows.append(
+            {
+                "scheme": summary.scheme_name,
+                "parameter": "Alpha_Daily",
+                "estimate": summary.alpha_daily,
+                "t_stat": summary.alpha_t_stat,
+                "p_value_two_sided": summary.alpha_p_value,
+                "p_value_one_sided": one_sided_alpha_p,
+                "r_squared": summary.r_squared,
+                "adj_r_squared": summary.adj_r_squared,
+                "n_observations": summary.n_observations,
+                "hac_max_lags": hac_max_lags,
+            }
+        )
+        rows.append(
+            {
+                "scheme": summary.strategy_name
+                if hasattr(summary, "strategy_name")
+                else summary.scheme_name,
+                "parameter": "Alpha_Annualized",
+                "estimate": summary.alpha_annualized,
+                "t_stat": summary.alpha_t_stat,
+                "p_value_two_sided": summary.alpha_p_value,
+                "p_value_one_sided": one_sided_alpha_p,
+                "r_squared": summary.r_squared,
+                "adj_r_squared": summary.adj_r_squared,
+                "n_observations": summary.n_observations,
+                "hac_max_lags": hac_max_lags,
+            }
+        )
+        for factor in FF5_FACTOR_COLUMNS:
+            rows.append(
+                {
+                    "scheme": summary.scheme_name,
+                    "parameter": factor,
+                    "estimate": summary.betas[factor],
+                    "t_stat": summary.t_stats[factor],
+                    "p_value_two_sided": summary.p_values[factor],
+                    "p_value_one_sided": np.nan,
+                    "r_squared": summary.r_squared,
+                    "adj_r_squared": summary.adj_r_squared,
+                    "n_observations": summary.n_observations,
+                    "hac_max_lags": hac_max_lags,
+                }
+            )
+
+    loadings_df = pd.DataFrame(rows)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    loadings_df.to_csv(output_path, index=False)
+    logging.info("Sub-issue #232: Exported FF5 factor loadings to %s", output_path)
+    return loadings_df
+
+
 if __name__ == "__main__":
     default_cfg = FactorAttributionConfig()
     ff5_df = download_ff5_daily_factors(default_cfg)
