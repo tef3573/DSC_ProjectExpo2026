@@ -7,9 +7,10 @@ and S&P 500 benchmarks with linear/log scale toggles and range selectors.
 Sub-issue #244: Underwater peak-to-trough maximum drawdown (MDD) visualization.
 Sub-issue #245: Active Black CEO constituent breadth (N_t) stepped area visualization.
 """
-from pathlib import Path
-from typing import Dict, Optional
 import json
+import math
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -110,20 +111,35 @@ def _build_date_rangeselector() -> Dict[str, object]:
     }
 
 
+def _assert_finite_numbers(node: Any, json_path: str = "$") -> None:
+    """Recursively verify that no NaN or Inf floats exist in a JSON-compatible tree."""
+    if isinstance(node, float):
+        if not math.isfinite(node):
+            raise ValueError(f"Non-finite float ({node}) detected at {json_path}")
+    elif isinstance(node, list):
+        for idx, item in enumerate(node):
+            _assert_finite_numbers(item, f"{json_path}[{idx}]")
+    elif isinstance(node, dict):
+        for key, val in node.items():
+            _assert_finite_numbers(val, f"{json_path}.{key}")
+
+
+def validate_plotly_json_schema(payload: Dict[str, Any]) -> None:
+    """Validate that a parsed Plotly figure dictionary satisfies the frontend contract."""
+    if not isinstance(payload, dict):
+        raise TypeError("Plotly figure payload must be a JSON object (dict).")
+    if "data" not in payload or not isinstance(payload["data"], list) or len(payload["data"]) == 0:
+        raise ValueError("Plotly figure JSON must contain a non-empty 'data' trace list.")
+    if "layout" not in payload or not isinstance(payload["layout"], dict):
+        raise ValueError("Plotly figure JSON must contain a 'layout' configuration object.")
+    _assert_finite_numbers(payload)
+
+
 def build_cumulative_equity_curve_figure(
     results_df: Optional[pd.DataFrame] = None,
     results_path: Path = BACKTEST_RESULTS_PATH,
 ) -> go.Figure:
-    """
-    Build an interactive Plotly cumulative equity curve comparison figure (#243).
-
-    Args:
-        results_df: Optional pre-loaded backtest results DataFrame indexed by date.
-        results_path: CSV path fallback when results_df is None.
-
-    Returns:
-        Configured plotly.graph_objects.Figure with linear/log toggle and range selector.
-    """
+    """Build an interactive Plotly cumulative equity curve comparison figure (#243)."""
     df = _load_backtest_df(results_df, results_path)
 
     fig = go.Figure()
@@ -206,16 +222,7 @@ def build_underwater_drawdown_figure(
     results_df: Optional[pd.DataFrame] = None,
     results_path: Path = BACKTEST_RESULTS_PATH,
 ) -> go.Figure:
-    """
-    Build an interactive Plotly underwater peak-to-trough drawdown chart (#244).
-
-    Args:
-        results_df: Optional pre-loaded backtest results DataFrame indexed by date.
-        results_path: CSV path fallback when results_df is None.
-
-    Returns:
-        Configured plotly.graph_objects.Figure displaying underwater drawdowns in %.
-    """
+    """Build an interactive Plotly underwater peak-to-trough drawdown chart (#244)."""
     df = _load_backtest_df(results_df, results_path)
 
     fig = go.Figure()
@@ -277,16 +284,7 @@ def build_active_constituent_count_figure(
     results_df: Optional[pd.DataFrame] = None,
     results_path: Path = BACKTEST_RESULTS_PATH,
 ) -> go.Figure:
-    """
-    Build an interactive Plotly stepped area chart of active Black CEO count N_t (#245).
-
-    Args:
-        results_df: Optional pre-loaded backtest results DataFrame indexed by date.
-        results_path: CSV path fallback when results_df is None.
-
-    Returns:
-        Configured plotly.graph_objects.Figure showing N_t over time and the N_t=3 threshold.
-    """
+    """Build an interactive Plotly stepped area chart of active Black CEO count N_t (#245)."""
     df = _load_backtest_df(results_df, results_path)
     if "Active_Constituents_Nt" not in df.columns:
         raise KeyError("Missing required column 'Active_Constituents_Nt' in backtest DataFrame.")
@@ -344,10 +342,13 @@ def build_active_constituent_count_figure(
 
 
 def export_figure_json(fig: go.Figure, output_path: Path) -> Path:
-    """Serialize a Plotly Figure cleanly to deterministic JSON on disk."""
+    """Serialize a Plotly Figure to strict UTF-8 JSON and validate its schema contract."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    payload = json.loads(fig.to_json())
-    output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    raw_json: str = fig.to_json(validate=True)
+    payload: Dict[str, Any] = json.loads(raw_json)
+    validate_plotly_json_schema(payload)
+    strict_json: str = json.dumps(payload, indent=2, allow_nan=False)
+    output_path.write_text(strict_json + "\n", encoding="utf-8")
     return output_path
 
 
