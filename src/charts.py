@@ -5,6 +5,7 @@ Interactive Plotly Visualization Builders for Milestone 5: Web Dashboard & Prese
 Sub-issue #243: Cumulative wealth / equity curve comparison across allocation schemes
 and S&P 500 benchmarks with linear/log scale toggles and range selectors.
 Sub-issue #244: Underwater peak-to-trough maximum drawdown (MDD) visualization.
+Sub-issue #245: Active Black CEO constituent breadth (N_t) stepped area visualization.
 """
 from pathlib import Path
 from typing import Dict, Optional
@@ -96,12 +97,16 @@ def _load_backtest_df(
 def _build_date_rangeselector() -> Dict[str, object]:
     """Return standardized 1Y / 5Y / 10Y / MAX Plotly x-axis range selector buttons."""
     return {
+        "y": 1.02,
+        "yanchor": "bottom",
+        "x": 0.0,
+        "xanchor": "left",
         "buttons": [
             {"count": 1, "label": "1Y", "step": "year", "stepmode": "backward"},
             {"count": 5, "label": "5Y", "step": "year", "stepmode": "backward"},
             {"count": 10, "label": "10Y", "step": "year", "stepmode": "backward"},
             {"step": "all", "label": "MAX"},
-        ]
+        ],
     }
 
 
@@ -148,15 +153,16 @@ def build_cumulative_equity_curve_figure(
             "text": "Cumulative Wealth Growth ($1.00 Initial Investment, Net of 10 bps Friction)",
             "x": 0.02,
             "xanchor": "left",
+            "y": 0.96,
         },
         template="plotly_white",
         hovermode="x unified",
-        height=540,
-        margin={"l": 60, "r": 30, "t": 90, "b": 50},
+        height=560,
+        margin={"l": 60, "r": 30, "t": 115, "b": 50},
         legend={
             "orientation": "h",
             "yanchor": "bottom",
-            "y": 1.02,
+            "y": 1.10,
             "xanchor": "left",
             "x": 0.0,
         },
@@ -176,7 +182,7 @@ def build_cumulative_equity_curve_figure(
                 "direction": "right",
                 "x": 1.0,
                 "xanchor": "right",
-                "y": 1.13,
+                "y": 1.08,
                 "yanchor": "top",
                 "buttons": [
                     {
@@ -219,7 +225,6 @@ def build_underwater_drawdown_figure(
         series = df[col_name].dropna()
         if series.empty:
             continue
-        # Ensure underwater percentages are negative (e.g., 0.7269 -> -72.69%)
         dd_pct = -series.abs() * 100.0
         fill_color = style["fill"]
         fig.add_trace(
@@ -241,15 +246,16 @@ def build_underwater_drawdown_figure(
             "text": "Underwater Peak-to-Trough Drawdown Profile (2000–2026)",
             "x": 0.02,
             "xanchor": "left",
+            "y": 0.96,
         },
         template="plotly_white",
         hovermode="x unified",
-        height=460,
-        margin={"l": 60, "r": 30, "t": 85, "b": 50},
+        height=480,
+        margin={"l": 60, "r": 30, "t": 110, "b": 50},
         legend={
             "orientation": "h",
             "yanchor": "bottom",
-            "y": 1.02,
+            "y": 1.10,
             "xanchor": "left",
             "x": 0.0,
         },
@@ -262,6 +268,76 @@ def build_underwater_drawdown_figure(
             "title": "Drawdown from Running Peak (%)",
             "ticksuffix": "%",
             "range": [-85, 2],
+        },
+    )
+    return fig
+
+
+def build_active_constituent_count_figure(
+    results_df: Optional[pd.DataFrame] = None,
+    results_path: Path = BACKTEST_RESULTS_PATH,
+) -> go.Figure:
+    """
+    Build an interactive Plotly stepped area chart of active Black CEO count N_t (#245).
+
+    Args:
+        results_df: Optional pre-loaded backtest results DataFrame indexed by date.
+        results_path: CSV path fallback when results_df is None.
+
+    Returns:
+        Configured plotly.graph_objects.Figure showing N_t over time and the N_t=3 threshold.
+    """
+    df = _load_backtest_df(results_df, results_path)
+    if "Active_Constituents_Nt" not in df.columns:
+        raise KeyError("Missing required column 'Active_Constituents_Nt' in backtest DataFrame.")
+
+    counts = df["Active_Constituents_Nt"].dropna()
+    max_count = int(counts.max()) if not counts.empty else 17
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=counts.index,
+            y=counts.values,
+            mode="lines",
+            name="Active Black CEO Constituents (N_t)",
+            line={"color": "#2B5C8F", "width": 2.2, "shape": "hv"},
+            fill="tozeroy",
+            fillcolor="rgba(43, 92, 143, 0.20)",
+            hovertemplate="%{x|%Y-%m-%d}<br>Active Constituents (N_t): %{y:d}<extra></extra>",
+        )
+    )
+
+    fig.add_hline(
+        y=3,
+        line_width=1.5,
+        line_dash="dash",
+        line_color="#D95F02",
+        annotation_text="Full-Deployment Threshold (N_t ≥ 3; 1/3 cap below)",
+        annotation_position="top left",
+    )
+
+    fig.update_layout(
+        title={
+            "text": "Point-in-Time Active Black CEO Portfolio Breadth (N_t, t+1 Lagged)",
+            "x": 0.02,
+            "xanchor": "left",
+            "y": 0.96,
+        },
+        template="plotly_white",
+        hovermode="x unified",
+        height=440,
+        margin={"l": 60, "r": 30, "t": 100, "b": 50},
+        showlegend=False,
+        xaxis={
+            "title": "Trading Date",
+            "rangeselector": _build_date_rangeselector(),
+            "rangeslider": {"visible": False},
+        },
+        yaxis={
+            "title": "Active Constituents (N_t)",
+            "dtick": 2,
+            "range": [0, max_count + 2],
         },
     )
     return fig
@@ -283,3 +359,7 @@ if __name__ == "__main__":
     dd_fig = build_underwater_drawdown_figure()
     dd_out = export_figure_json(dd_fig, CHARTS_OUTPUT_DIR / "underwater_drawdown.json")
     print(f"Exported underwater drawdown figure JSON to {dd_out}")
+
+    breadth_fig = build_active_constituent_count_figure()
+    breadth_out = export_figure_json(breadth_fig, CHARTS_OUTPUT_DIR / "active_constituent_count.json")
+    print(f"Exported active constituent count figure JSON to {breadth_out}")

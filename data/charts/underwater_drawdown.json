@@ -27898,29 +27898,28 @@
     "title": {
       "text": "Underwater Peak-to-Trough Drawdown Profile (2000\u20132026)",
       "x": 0.02,
-      "xanchor": "left"
+      "xanchor": "left",
+      "y": 0.96
     },
     "margin": {
       "l": 60,
       "r": 30,
-      "t": 85,
+      "t": 110,
       "b": 50
     },
     "legend": {
       "orientation": "h",
       "yanchor": "bottom",
-      "y": 1.02,
+      "y": 1.1,
       "xanchor": "left",
       "x": 0.0
     },
     "xaxis": {
-      "rangeslider": {
-        "visible": false
-      },
-      "title": {
-        "text": "Trading Date"
-      },
       "rangeselector": {
+        "y": 1.02,
+        "yanchor": "bottom",
+        "x": 0.0,
+        "xanchor": "left",
         "buttons": [
           {
             "count": 1,
@@ -27945,6 +27944,12 @@
             "step": "all"
           }
         ]
+      },
+      "rangeslider": {
+        "visible": false
+      },
+      "title": {
+        "text": "Trading Date"
       }
     },
     "yaxis": {
@@ -27958,6 +27963,6 @@
       ]
     },
     "hovermode": "x unified",
-    "height": 460
+    "height": 480
   }
 }
