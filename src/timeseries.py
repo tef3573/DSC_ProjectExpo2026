@@ -529,3 +529,123 @@ def _cli_main() -> None:
 
 if __name__ == "__main__":
     _cli_main()
+
+
+@dataclass(frozen=True)
+class WalkForwardVolResult:
+    """Out-of-sample walk-forward 1-step-ahead GARCH volatility & overlay diagnostics (#251)."""
+
+    target_ann_vol: float
+    oos_sessions: int
+    qlike_loss: float
+    unscaled_metrics: Dict[str, float]
+    vol_targeted_metrics: Dict[str, float]
+    forecast_vol_ann: pd.Series
+    overlay_returns_net: pd.Series
+
+    def to_dict(self) -> Dict[str, float]:
+        """Serialize scalar walk-forward forecast and overlay metrics to JSON-safe dict."""
+        return {
+            "target_ann_vol": float(self.target_ann_vol),
+            "oos_sessions": int(self.oos_sessions),
+            "qlike_loss": float(self.qlike_loss),
+            "unscaled_cagr": float(self.unscaled_metrics["cagr"]),
+            "unscaled_ann_vol": float(self.unscaled_metrics["annualized_volatility"]),
+            "unscaled_sharpe": float(self.unscaled_metrics["sharpe_ratio"]),
+            "unscaled_mdd": float(self.unscaled_metrics["max_drawdown"]),
+            "vol_targeted_cagr": float(self.vol_targeted_metrics["cagr"]),
+            "vol_targeted_ann_vol": float(self.vol_targeted_metrics["annualized_volatility"]),
+            "vol_targeted_sharpe": float(self.vol_targeted_metrics["sharpe_ratio"]),
+            "vol_targeted_mdd": float(self.vol_targeted_metrics["max_drawdown"]),
+        }
+
+
+def _fit_expanding_params(hist_slice: np.ndarray) -> Tuple[GarchParams, float]:
+    """Fit GARCH(1,1) on an expanding historical window and return final filtered variance."""
+    mu_hat = float(np.mean(hist_slice))
+    resid_hist = hist_slice - mu_hat
+    s_var = float(max(np.var(resid_hist, ddof=1), MIN_VARIANCE))
+    theta, _ = _optimize_garch_theta(resid_hist, s_var)
+    params = _build_garch_params(
+        GarchCoefficients(
+            mu=mu_hat,
+            omega=float(theta[0]),
+            alpha=float(theta[1]),
+            gamma=0.0,
+            beta=float(theta[2]),
+        )
+    )
+    filtered = _filter_garch_variance(resid_hist, params.coeffs, s_var)
+    return params, float(filtered[-1])
+
+
+def _compute_causal_garch_forecasts(
+    values: np.ndarray,
+    min_train_sessions: int,
+    refit_step: int,
+) -> np.ndarray:
+    """Compute strictly causal 1-step-ahead daily volatility forecasts via expanding GARCH."""
+    n_total = len(values)
+    forecast_daily = np.full(n_total, np.nan, dtype=np.float64)
+    current_params: Optional[GarchParams] = None
+    running_var = float(np.var(values[:min_train_sessions], ddof=1))
+
+    for idx in range(min_train_sessions, n_total):
+        if current_params is None or (idx - min_train_sessions) % refit_step == 0:
+            current_params, running_var = _fit_expanding_params(values[:idx])
+
+        prev_resid = values[idx - 1] - current_params.mu
+        next_var = (
+            current_params.omega
+            + current_params.alpha * (prev_resid * prev_resid)
+            + current_params.beta * running_var
+        )
+        running_var = max(float(next_var), MIN_VARIANCE)
+        forecast_daily[idx] = math.sqrt(running_var)
+    return forecast_daily
+
+
+def run_walk_forward_garch_overlay(
+    returns: pd.Series,
+    target_ann_vol: float = 0.20,
+    min_train_sessions: int = 252,
+    refit_step: int = 63,
+    transaction_cost_bps: float = 10.0,
+) -> WalkForwardVolResult:
+    """
+    Generate strictly causal 1-step-ahead GARCH(1,1) volatility forecasts and simulate a
+    long-only volatility-targeted exposure overlay (#251).
+    """
+    clean = returns.dropna().astype(np.float64)
+    if len(clean) <= min_train_sessions + 10:
+        raise ValueError("Insufficient observations for walk-forward GARCH forecasting.")
+
+    forecast_daily = _compute_causal_garch_forecasts(
+        clean.to_numpy(dtype=np.float64), min_train_sessions, refit_step
+    )
+    oos_mask = ~np.isnan(forecast_daily)
+    oos_ret = clean.loc[oos_mask]
+    oos_fcast_ann = forecast_daily[oos_mask] * math.sqrt(TRADING_DAYS_PER_YEAR)
+
+    ratio = np.maximum(oos_ret.to_numpy(dtype=np.float64) ** 2, 1e-10) / np.maximum(
+        forecast_daily[oos_mask] ** 2, 1e-10
+    )
+    qlike = float(np.mean(ratio - np.log(ratio) - 1.0))
+
+    weights = np.clip(target_ann_vol / np.maximum(oos_fcast_ann, 1e-6), 0.0, 1.0)
+    turnover = np.abs(weights - np.concatenate(([0.0], weights[:-1])))
+    net_overlay = pd.Series(
+        weights * oos_ret.to_numpy(dtype=np.float64) - turnover * (transaction_cost_bps / 10000.0),
+        index=oos_ret.index,
+        name="Black_CEO_VolTargeted_Net",
+    )
+
+    return WalkForwardVolResult(
+        target_ann_vol=target_ann_vol,
+        oos_sessions=len(oos_ret),
+        qlike_loss=qlike,
+        unscaled_metrics=compute_subperiod_performance_metrics(oos_ret),
+        vol_targeted_metrics=compute_subperiod_performance_metrics(net_overlay),
+        forecast_vol_ann=pd.Series(oos_fcast_ann, index=oos_ret.index, name="GARCH_OOS_Vol_Ann"),
+        overlay_returns_net=net_overlay,
+    )
