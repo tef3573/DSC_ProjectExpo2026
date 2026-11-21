@@ -96,7 +96,7 @@ class TestMilestone4IntegrationPipeline(unittest.TestCase):
             engine = SyntheticBootstrapEngine.from_sp_benchmark_series(
                 benchmark_returns=bt_df["SPY_Daily"],
                 active_counts=mask_df.sum(axis=1),
-                pool_size=500,
+                pool_size=250,
                 seed=42,
             )
             trials = engine.simulate_random_portfolios(n_trials=500, seed=42, n_jobs=-1)

@@ -235,7 +235,8 @@ class TestStatisticalSignificanceAndResiduals(unittest.TestCase):
     def test_alpha_hypothesis_test_and_markdown_table_export(
         self,
     ) -> None:
-        """Sub-issues #214-#216: Verify annualized alpha CI, one-sided p-value, and Markdown table."""
+        """Sub-issues #214-#216: Verify annualized alpha CI, one-sided p-value, and Markdown
+        table."""
         bt_df = pd.read_csv(BACKTEST_RESULTS_PATH, index_col=0, parse_dates=True)
         ff5_df = download_ff5_daily_factors(force_refresh=False, as_decimal=True)
 
