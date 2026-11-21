@@ -397,5 +397,3 @@ def export_mc_results_json(
     output_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     logging.info("Sub-issue #233: Exported Monte Carlo results to %s", output_path)
     return payload
-
-
