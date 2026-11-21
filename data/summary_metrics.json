@@ -9,63 +9,85 @@
     "transaction_fee_bps": 10.0
   },
   "strategy_performance": {
-    "cagr_net": 0.13352114122655845,
-    "cagr_gross": 0.13439365155773686,
-    "annualized_volatility": 0.4207874042885424,
-    "sharpe_ratio": 0.44537023107314233,
-    "sortino_ratio": 0.8395358411955984,
-    "calmar_ratio": 0.18367542005154794,
-    "max_drawdown": 0.7269407152524064,
-    "cumulative_multiple_net": 28.889780951026612,
-    "cumulative_multiple_gross": 29.492546868357437,
-    "mean_daily_turnover": 0.0030495803857643828,
-    "annualized_turnover": 0.7684942572126244,
-    "total_transaction_friction_cost": 0.02062431214892275
+    "cagr_net": 0.13352126921919583,
+    "cagr_gross": 0.1343937797133501,
+    "annualized_volatility": 0.42078742535206476,
+    "sharpe_ratio": 0.4453704818102206,
+    "sortino_ratio": 0.839536556842496,
+    "calmar_ratio": 0.18367556402186852,
+    "max_drawdown": 0.7269408422957052,
+    "cumulative_multiple_net": 28.889868497588242,
+    "cumulative_multiple_gross": 29.492636286491866,
+    "mean_daily_turnover": 0.0030495806505121217,
+    "annualized_turnover": 0.7684943239290547,
+    "total_transaction_friction_cost": 0.020624313939413476
   },
   "benchmark_spy_full_horizon": {
     "observations": 6763,
     "start_date": "2000-01-03",
     "end_date": "2026-11-20",
-    "strategy_cagr": 0.13352114122655845,
-    "benchmark_cagr": 0.07843781136464978,
-    "strategy_volatility": 0.4207874042885424,
-    "benchmark_volatility": 0.1925413898854241,
-    "strategy_sharpe": 0.44537023107314233,
-    "benchmark_sharpe": 0.41121955293777873,
-    "strategy_mdd": 0.7269407152524064,
-    "benchmark_mdd": 0.5518945976884657,
-    "beta": 0.9383872323134952,
-    "alpha_annual": 0.11310770002538854,
-    "tracking_error": 0.38020796001280555
+    "strategy_cagr": 0.13352126921919583,
+    "benchmark_cagr": 0.07843781136464356,
+    "strategy_volatility": 0.42078742535206476,
+    "benchmark_volatility": 0.19254135935200908,
+    "strategy_sharpe": 0.4453704818102206,
+    "benchmark_sharpe": 0.4112195891234113,
+    "strategy_mdd": 0.7269408422957052,
+    "benchmark_mdd": 0.5518945976884702,
+    "beta": 0.9383897383479964,
+    "alpha_annual": 0.11310762173809569,
+    "tracking_error": 0.3802077525305723
   },
   "benchmark_rsp_isolated": {
     "observations": 5928,
     "start_date": "2003-05-02",
     "end_date": "2026-11-20",
-    "strategy_cagr": 0.13712065129119355,
-    "benchmark_cagr": 0.11011043817535882,
-    "strategy_volatility": 0.43331641308811397,
-    "benchmark_volatility": 0.19688197821466089,
-    "strategy_sharpe": 0.44845127093419374,
-    "benchmark_sharpe": 0.5536973504535072,
-    "strategy_mdd": 0.7269407152524061,
-    "benchmark_mdd": 0.5992284143446169,
-    "beta": 0.9597524306220768,
-    "alpha_annual": 0.08969577595203382,
-    "tracking_error": 0.3900266585710773
+    "strategy_cagr": 0.13712079789380827,
+    "benchmark_cagr": 0.1101104381753526,
+    "strategy_volatility": 0.4333164280674643,
+    "benchmark_volatility": 0.1968822077504887,
+    "strategy_sharpe": 0.44845155043283075,
+    "benchmark_sharpe": 0.5536969268039167,
+    "strategy_mdd": 0.7269408422957045,
+    "benchmark_mdd": 0.5992284143446199,
+    "beta": 0.9597484988810828,
+    "alpha_annual": 0.08969629046593744,
+    "tracking_error": 0.39002695942608345
+  },
+  "timeseries_arima": {
+    "series_name": "Black_CEO_Net_Excess",
+    "oos_sessions": 6511,
+    "ljung_box_pvalues": {
+      "lag_1": 0.11640895667104566,
+      "lag_5": 1.4426569613393634e-23,
+      "lag_10": 1.2499461314404405e-21,
+      "lag_21": 6.096646406442727e-23
+    },
+    "arima_order": [
+      1,
+      0,
+      1
+    ],
+    "mean_benchmark_rmse": 0.026588282625753884,
+    "arima_oos_rmse": 0.026595587487102366,
+    "arima_oos_r2": -0.0005495552247321012,
+    "arima_directional_accuracy": 0.5120565197358317,
+    "arimax_oos_rmse": 0.02662279219183317,
+    "arimax_oos_r2": -0.0025975323009563844,
+    "arimax_directional_accuracy": 0.5168176931346952
   },
   "timeseries_garch": {
     "Black_CEO_Net": {
       "n_obs": 6755,
-      "mu": 0.0008037876513209555,
-      "omega": 1.6176625903150434e-05,
-      "alpha": 0.25076044436524914,
+      "mu": 0.0008037881077659487,
+      "omega": 1.2275937113881953e-05,
+      "alpha": 0.21038483995348858,
       "gamma": 0.0,
-      "beta": 0.7482381040620457,
-      "persistence": 0.9989985484272949,
-      "half_life_days": 691.795853954662,
-      "unconditional_ann_vol": 2.017573035692889,
-      "log_likelihood": 17884.83871152094
+      "beta": 0.7886116922369318,
+      "persistence": 0.9989965321904204,
+      "half_life_days": 690.4051533211746,
+      "unconditional_ann_vol": 1.7558033579468662,
+      "log_likelihood": 17886.12405632871
     },
     "Convex_Quality_Net": {
       "n_obs": 6755,
@@ -81,29 +103,29 @@
     },
     "SPY_Daily": {
       "n_obs": 6763,
-      "mu": 0.00037327712934952977,
-      "omega": 2.666518820043998e-06,
-      "alpha": 0.12767953321308043,
+      "mu": 0.0003732771071721197,
+      "omega": 2.666540728307899e-06,
+      "alpha": 0.12767935302973785,
       "gamma": 0.0,
-      "beta": 0.8528293487924379,
-      "persistence": 0.9805088820055183,
-      "half_life_days": 35.214496848293464,
-      "unconditional_ann_vol": 0.18567533737482442,
-      "log_likelihood": 21857.185490002325
+      "beta": 0.8528292824092846,
+      "persistence": 0.9805086354390224,
+      "half_life_days": 35.21404697050525,
+      "unconditional_ann_vol": 0.18567492572405717,
+      "log_likelihood": 21857.182696705037
     }
   },
   "timeseries_gjr_garch": {
     "Black_CEO_Net": {
       "n_obs": 6755,
-      "mu": 0.0008037876513209555,
-      "omega": 2.1649597930689843e-05,
-      "alpha": 0.2673466551697525,
-      "gamma": 0.06288481228072783,
-      "beta": 0.7000992788071576,
-      "persistence": 0.998888340117274,
-      "half_life_days": 623.1778693702981,
-      "unconditional_ann_vol": 2.215334043082528,
-      "log_likelihood": 17873.113886026775
+      "mu": 0.0008037881077659487,
+      "omega": 1.5848300897509198e-05,
+      "alpha": 0.20575779746912462,
+      "gamma": 0.08374168459544766,
+      "beta": 0.7513713470342899,
+      "persistence": 0.9989999868011383,
+      "half_life_days": 692.7914005447353,
+      "unconditional_ann_vol": 1.9984291615231657,
+      "log_likelihood": 17882.278318201454
     },
     "Convex_Quality_Net": {
       "n_obs": 6755,
@@ -119,30 +141,30 @@
     },
     "SPY_Daily": {
       "n_obs": 6763,
-      "mu": 0.00037327712934952977,
-      "omega": 2.850422005385885e-06,
-      "alpha": 0.032570337591659164,
-      "gamma": 0.1928730590643204,
-      "beta": 0.8499568140527403,
-      "persistence": 0.9789636811765596,
-      "half_life_days": 32.602220946329126,
-      "unconditional_ann_vol": 0.18478638922020937,
-      "log_likelihood": 21992.837824342227
+      "mu": 0.0003732771071721197,
+      "omega": 2.850423414155215e-06,
+      "alpha": 0.032570435513556366,
+      "gamma": 0.19287183517263792,
+      "beta": 0.8499573292351316,
+      "persistence": 0.9789636823350069,
+      "half_life_days": 32.60222276091953,
+      "unconditional_ann_vol": 0.18478643997185717,
+      "log_likelihood": 21992.835196219254
     }
   },
   "timeseries_subperiods": {
     "pre_2010": {
       "Black_CEO_Net": {
         "n_obs": 2514,
-        "mu": 0.0005058825794433374,
-        "omega": 3.099871049731657e-06,
-        "alpha": 0.08509374591610092,
+        "mu": 0.0005058838858658794,
+        "omega": 3.099662089889052e-06,
+        "alpha": 0.08509563437734312,
         "gamma": 0.0,
-        "beta": 0.908484266731552,
-        "persistence": 0.993578012647653,
-        "half_life_days": 107.58649332852245,
-        "unconditional_ann_vol": 0.34876858673384614,
-        "log_likelihood": 6885.530033769344
+        "beta": 0.9084896193114899,
+        "persistence": 0.993585253688833,
+        "half_life_days": 107.70833028658681,
+        "unconditional_ann_vol": 0.3489536163208162,
+        "log_likelihood": 6885.52934471249
       },
       "Convex_Quality_Net": {
         "n_obs": 2514,
@@ -158,29 +180,29 @@
       },
       "SPY_Daily": {
         "n_obs": 2515,
-        "mu": 6.327384286194997e-05,
-        "omega": 1.1832883850384437e-06,
-        "alpha": 0.07665194726382578,
+        "mu": 6.327369272561727e-05,
+        "omega": 1.1831994778799985e-06,
+        "alpha": 0.07666531673769249,
         "gamma": 0.0,
-        "beta": 0.9158964255311527,
-        "persistence": 0.9925483727949784,
-        "half_life_days": 92.67256734787915,
-        "unconditional_ann_vol": 0.2000414580660648,
-        "log_likelihood": 7779.8064508873285
+        "beta": 0.9159007131516195,
+        "persistence": 0.992566029889312,
+        "half_life_days": 92.89350757083194,
+        "unconditional_ann_vol": 0.2002713612549829,
+        "log_likelihood": 7779.806913010013
       }
     },
     "post_2010": {
       "Black_CEO_Net": {
         "n_obs": 4241,
-        "mu": 0.0009803812261147146,
-        "omega": 4.558732521019799e-05,
-        "alpha": 0.3270389720064812,
+        "mu": 0.0009803811787060038,
+        "omega": 4.558729128706414e-05,
+        "alpha": 0.32704073435252534,
         "gamma": 0.0,
-        "beta": 0.6124685710567207,
-        "persistence": 0.9395075430632018,
-        "half_life_days": 11.108229121797594,
-        "unconditional_ann_vol": 0.43578443457101973,
-        "log_likelihood": 11121.242369873802
+        "beta": 0.6124673784519407,
+        "persistence": 0.939508112804466,
+        "half_life_days": 11.108337077525407,
+        "unconditional_ann_vol": 0.43578632463629685,
+        "log_likelihood": 11121.242813781231
       },
       "Convex_Quality_Net": {
         "n_obs": 4241,
@@ -196,15 +218,15 @@
       },
       "SPY_Daily": {
         "n_obs": 4248,
-        "mu": 0.0005568125025878214,
-        "omega": 3.8058271114059713e-06,
-        "alpha": 0.16037689097893654,
+        "mu": 0.000556812556167636,
+        "omega": 3.8143691751580038e-06,
+        "alpha": 0.16056350099155642,
         "gamma": 0.0,
-        "beta": 0.806396965818413,
-        "persistence": 0.9667738567973496,
-        "half_life_days": 20.512974444708654,
-        "unconditional_ann_vol": 0.1698966563833254,
-        "log_likelihood": 14103.358847826512
+        "beta": 0.8061343343436133,
+        "persistence": 0.9666978353351696,
+        "half_life_days": 20.46534772150703,
+        "unconditional_ann_vol": 0.169892966842281,
+        "log_likelihood": 14103.35569293361
       }
     }
   },
@@ -212,11 +234,11 @@
     "pre_2010": {
       "Black_CEO_Net": {
         "n_obs": 2515,
-        "cagr": 0.07334371728603029,
-        "annualized_volatility": 0.3387655290480545,
-        "sharpe_ratio": 0.3322315268614103,
-        "sortino_ratio": 0.5139587887467614,
-        "max_drawdown": 0.7269407152524064
+        "cagr": 0.07334405085371798,
+        "annualized_volatility": 0.33876560216930435,
+        "sharpe_ratio": 0.33223242658201996,
+        "sortino_ratio": 0.5139603383676024,
+        "max_drawdown": 0.7269408422957047
       },
       "Convex_Quality_Net": {
         "n_obs": 2515,
@@ -228,21 +250,21 @@
       },
       "SPY_Daily": {
         "n_obs": 2515,
-        "cagr": -0.009121876912320692,
-        "annualized_volatility": 0.22436191311547668,
-        "sharpe_ratio": 0.004706485433153948,
-        "sortino_ratio": 0.006672646843464696,
-        "max_drawdown": 0.5518945976884657
+        "cagr": -0.009121876912320026,
+        "annualized_volatility": 0.22436174200665343,
+        "sharpe_ratio": 0.004706320391492544,
+        "sortino_ratio": 0.006672415736788284,
+        "max_drawdown": 0.5518945976884652
       }
     },
     "post_2010": {
       "Black_CEO_Net": {
         "n_obs": 4248,
-        "cagr": 0.17072692834051106,
-        "annualized_volatility": 0.4625592441459505,
-        "sharpe_ratio": 0.5009631193987263,
-        "sortino_ratio": 1.0266953792375393,
-        "max_drawdown": 0.5320671994203215
+        "cagr": 0.17072692339449325,
+        "annualized_volatility": 0.46255924308408114,
+        "sharpe_ratio": 0.500963094763285,
+        "sortino_ratio": 1.0266956570181334,
+        "max_drawdown": 0.5320672404576616
       },
       "Convex_Quality_Net": {
         "n_obs": 4242,
@@ -254,11 +276,11 @@
       },
       "SPY_Daily": {
         "n_obs": 4248,
-        "cagr": 0.13388084872668005,
-        "annualized_volatility": 0.17089547524991736,
-        "sharpe_ratio": 0.7339439393777208,
-        "sortino_ratio": 1.0288489552372948,
-        "max_drawdown": 0.3371731077533573
+        "cagr": 0.13388084872668027,
+        "annualized_volatility": 0.17089555339852022,
+        "sharpe_ratio": 0.733943682761447,
+        "sortino_ratio": 1.0288489959008198,
+        "max_drawdown": 0.33717278269767526
       }
     }
   },
@@ -274,31 +296,31 @@
       "series": {
         "Black_CEO_Net": {
           "sessions": 648,
-          "cumulative_return": 0.1235658932719268,
-          "annualized_return": 0.046350564317804155,
-          "excess_cumulative_vs_spy": 0.5500018107418687,
-          "annualized_volatility": 0.3279024623501811,
-          "max_drawdown": 0.33374422893808586,
+          "cumulative_return": 0.12356571247690806,
+          "annualized_return": 0.04635049884051634,
+          "excess_cumulative_vs_spy": 0.5500016299468493,
+          "annualized_volatility": 0.3279026557088945,
+          "max_drawdown": 0.33374424415853826,
           "recovery_days": 59,
-          "downside_capture_vs_spy": 0.8033323772547754
+          "downside_capture_vs_spy": 0.8033336872897097
         },
         "Convex_Quality_Net": {
           "sessions": 648,
           "cumulative_return": -0.33805265746781843,
           "annualized_return": -0.14823414218580777,
-          "excess_cumulative_vs_spy": 0.08838326000212349,
+          "excess_cumulative_vs_spy": 0.08838326000212282,
           "annualized_volatility": 0.291907677848036,
           "max_drawdown": 0.5190322951815743,
           "recovery_days": null,
-          "downside_capture_vs_spy": 0.669791966633832
+          "downside_capture_vs_spy": 0.6697923882178521
         },
         "SPY_Daily": {
           "sessions": 648,
-          "cumulative_return": -0.4264359174699419,
-          "annualized_return": -0.19440789433016137,
+          "cumulative_return": -0.42643591746994125,
+          "annualized_return": -0.19440789433016104,
           "excess_cumulative_vs_spy": 0.0,
-          "annualized_volatility": 0.2373347883506114,
-          "max_drawdown": 0.4751583712288031,
+          "annualized_volatility": 0.23733414116969534,
+          "max_drawdown": 0.4751583712288024,
           "recovery_days": null,
           "downside_capture_vs_spy": 1.0
         },
@@ -325,43 +347,43 @@
       "series": {
         "Black_CEO_Net": {
           "sessions": 356,
-          "cumulative_return": -0.6775335733041977,
-          "annualized_return": -0.5511788632183968,
-          "excess_cumulative_vs_spy": -0.129859435947558,
-          "annualized_volatility": 0.5073989404036265,
-          "max_drawdown": 0.6817345707177246,
+          "cumulative_return": -0.6775339127510742,
+          "annualized_return": -0.5511791976530123,
+          "excess_cumulative_vs_spy": -0.12985977539443372,
+          "annualized_volatility": 0.507398957107915,
+          "max_drawdown": 0.681734470680996,
           "recovery_days": null,
-          "downside_capture_vs_spy": 0.9874120141180479
+          "downside_capture_vs_spy": 0.9874099788735435
         },
         "Convex_Quality_Net": {
           "sessions": 356,
           "cumulative_return": -0.591343176139311,
           "annualized_return": -0.4692446264521214,
-          "excess_cumulative_vs_spy": -0.043669038782671254,
+          "excess_cumulative_vs_spy": -0.04366903878267048,
           "annualized_volatility": 0.4949733823030778,
           "max_drawdown": 0.6737976056866852,
           "recovery_days": null,
-          "downside_capture_vs_spy": 1.0839693193135294
+          "downside_capture_vs_spy": 1.0839678615918837
         },
         "SPY_Daily": {
           "sessions": 356,
-          "cumulative_return": -0.5476741373566397,
-          "annualized_return": -0.4296964677778071,
+          "cumulative_return": -0.5476741373566405,
+          "annualized_return": -0.4296964677778079,
           "excess_cumulative_vs_spy": 0.0,
-          "annualized_volatility": 0.3809608622283704,
-          "max_drawdown": 0.551894597688465,
+          "annualized_volatility": 0.3809611146683037,
+          "max_drawdown": 0.5518945976884658,
           "recovery_days": null,
           "downside_capture_vs_spy": 1.0
         },
         "RSP_Daily": {
           "sessions": 356,
-          "cumulative_return": -0.5886981077131428,
-          "annualized_return": -0.46681514577627115,
-          "excess_cumulative_vs_spy": -0.04102397035650307,
-          "annualized_volatility": 0.4012957056998987,
-          "max_drawdown": 0.5915732840952469,
+          "cumulative_return": -0.5886981077131426,
+          "annualized_return": -0.4668151457762708,
+          "excess_cumulative_vs_spy": -0.04102397035650207,
+          "annualized_volatility": 0.4012978608866959,
+          "max_drawdown": 0.5915732840952467,
           "recovery_days": null,
-          "downside_capture_vs_spy": 1.0827567987813156
+          "downside_capture_vs_spy": 1.0827601107344522
         }
       }
     },
@@ -376,31 +398,31 @@
       "series": {
         "Black_CEO_Net": {
           "sessions": 2756,
-          "cumulative_return": 10.022328864078819,
-          "annualized_return": 0.24538092336462292,
-          "excess_cumulative_vs_spy": 4.8145984499130545,
-          "annualized_volatility": 0.3464882622550594,
-          "max_drawdown": 0.5320671994203215,
+          "cumulative_return": 10.022367715628727,
+          "annualized_return": 0.24538132474656082,
+          "excess_cumulative_vs_spy": 4.814637301462991,
+          "annualized_volatility": 0.34648826223473095,
+          "max_drawdown": 0.5320672404576614,
           "recovery_days": 491,
-          "downside_capture_vs_spy": 0.9005066595213732
+          "downside_capture_vs_spy": 0.9005062388230309
         },
         "Convex_Quality_Net": {
           "sessions": 2756,
           "cumulative_return": 6.79866087309698,
           "annualized_return": 0.20660054062235855,
-          "excess_cumulative_vs_spy": 1.5909304589312159,
+          "excess_cumulative_vs_spy": 1.5909304589312443,
           "annualized_volatility": 0.2731502228677072,
           "max_drawdown": 0.4406769370472273,
           "recovery_days": 417,
-          "downside_capture_vs_spy": 1.1088879038092812
+          "downside_capture_vs_spy": 1.10888710382636
         },
         "SPY_Daily": {
           "sessions": 2756,
-          "cumulative_return": 5.2077304141657645,
-          "annualized_return": 0.18168927481692965,
+          "cumulative_return": 5.207730414165736,
+          "annualized_return": 0.1816892748169292,
           "excess_cumulative_vs_spy": 0.0,
-          "annualized_volatility": 0.15495198094623155,
-          "max_drawdown": 0.1934897271580048,
+          "annualized_volatility": 0.15495229243714628,
+          "max_drawdown": 0.19348910505566294,
           "recovery_days": 75,
           "downside_capture_vs_spy": 1.0
         },
@@ -408,11 +430,11 @@
           "sessions": 2756,
           "cumulative_return": 5.861887316991197,
           "annualized_return": 0.19256423002890166,
-          "excess_cumulative_vs_spy": 0.6541569028254326,
-          "annualized_volatility": 0.17193820830347212,
-          "max_drawdown": 0.22880864313834254,
+          "excess_cumulative_vs_spy": 0.654156902825461,
+          "annualized_volatility": 0.1719382255326922,
+          "max_drawdown": 0.22880864313834257,
           "recovery_days": 111,
-          "downside_capture_vs_spy": 1.0758147782836527
+          "downside_capture_vs_spy": 1.0758132739437682
         }
       }
     },
@@ -427,43 +449,43 @@
       "series": {
         "Black_CEO_Net": {
           "sessions": 472,
-          "cumulative_return": 1.7142202870367198,
-          "annualized_return": 0.7042071370490091,
-          "excess_cumulative_vs_spy": 1.2651483860200594,
-          "annualized_volatility": 1.1206296237528643,
-          "max_drawdown": 0.4698172949882954,
+          "cumulative_return": 1.7142202386842458,
+          "annualized_return": 0.7042071208400722,
+          "excess_cumulative_vs_spy": 1.2651483376675825,
+          "annualized_volatility": 1.120629657320564,
+          "max_drawdown": 0.4698173931548669,
           "recovery_days": 61,
-          "downside_capture_vs_spy": 1.2813204638058822
+          "downside_capture_vs_spy": 1.281320776755972
         },
         "Convex_Quality_Net": {
           "sessions": 472,
           "cumulative_return": 1.4020187999206533,
           "annualized_return": 0.5965741599746288,
-          "excess_cumulative_vs_spy": 0.9529468989039929,
+          "excess_cumulative_vs_spy": 0.95294689890399,
           "annualized_volatility": 0.6278244505790994,
           "max_drawdown": 0.38010548045503434,
           "recovery_days": 60,
-          "downside_capture_vs_spy": 0.7832449960330572
+          "downside_capture_vs_spy": 0.7832452178053882
         },
         "SPY_Daily": {
           "sessions": 472,
-          "cumulative_return": 0.4490719010166604,
-          "annualized_return": 0.21900543887020918,
+          "cumulative_return": 0.4490719010166633,
+          "annualized_return": 0.2190054388702105,
           "excess_cumulative_vs_spy": 0.0,
-          "annualized_volatility": 0.2603070831898521,
-          "max_drawdown": 0.33443872996454926,
+          "annualized_volatility": 0.26030674013351507,
+          "max_drawdown": 0.3344384035679061,
           "recovery_days": 95,
           "downside_capture_vs_spy": 1.0
         },
         "RSP_Daily": {
           "sessions": 472,
-          "cumulative_return": 0.42153036448745707,
-          "annualized_return": 0.20658034009464332,
-          "excess_cumulative_vs_spy": -0.027541536529203325,
-          "annualized_volatility": 0.29161212103310574,
-          "max_drawdown": 0.3901044171839547,
+          "cumulative_return": 0.4215294178897675,
+          "annualized_return": 0.20657991112737673,
+          "excess_cumulative_vs_spy": -0.027542483126895778,
+          "annualized_volatility": 0.29161202763211225,
+          "max_drawdown": 0.3901044171839546,
           "recovery_days": 161,
-          "downside_capture_vs_spy": 1.059356071229682
+          "downside_capture_vs_spy": 1.0593546306755057
         }
       }
     },
@@ -478,43 +500,43 @@
       "series": {
         "Black_CEO_Net": {
           "sessions": 458,
-          "cumulative_return": -0.19953723198911832,
-          "annualized_return": -0.11525825244706456,
-          "excess_cumulative_vs_spy": -0.08798002334536414,
-          "annualized_volatility": 0.3113874076342378,
-          "max_drawdown": 0.26885203793686563,
+          "cumulative_return": -0.1995371812686857,
+          "annualized_return": -0.1152582216014526,
+          "excess_cumulative_vs_spy": -0.08798019694484549,
+          "annualized_volatility": 0.31138745128764106,
+          "max_drawdown": 0.26885205436433296,
           "recovery_days": null,
-          "downside_capture_vs_spy": 1.2230099628613302
+          "downside_capture_vs_spy": 1.2230098784690797
         },
         "Convex_Quality_Net": {
           "sessions": 458,
           "cumulative_return": -0.08465688556738638,
           "annualized_return": -0.04750486171029367,
-          "excess_cumulative_vs_spy": 0.026900323076367805,
+          "excess_cumulative_vs_spy": 0.026900098756453827,
           "annualized_volatility": 0.27468739819485455,
           "max_drawdown": 0.21447930048233632,
           "recovery_days": 23,
-          "downside_capture_vs_spy": 0.9633304994693107
+          "downside_capture_vs_spy": 0.9633302884741611
         },
         "SPY_Daily": {
           "sessions": 458,
-          "cumulative_return": -0.11155720864375418,
-          "annualized_return": -0.0630099241127191,
+          "cumulative_return": -0.1115569843238402,
+          "annualized_return": -0.0630097939434725,
           "excess_cumulative_vs_spy": 0.0,
-          "annualized_volatility": 0.20091625676940097,
-          "max_drawdown": 0.24496367979338357,
+          "annualized_volatility": 0.20091643839996715,
+          "max_drawdown": 0.24496407121657882,
           "recovery_days": null,
           "downside_capture_vs_spy": 1.0
         },
         "RSP_Daily": {
           "sessions": 458,
-          "cumulative_return": -0.15214759550010248,
-          "annualized_return": -0.0868113809667923,
-          "excess_cumulative_vs_spy": -0.040590386856348304,
-          "annualized_volatility": 0.19310418869618381,
-          "max_drawdown": 0.21384392500849433,
+          "cumulative_return": -0.15214769681531826,
+          "annualized_return": -0.0868114410080778,
+          "excess_cumulative_vs_spy": -0.040590712491478054,
+          "annualized_volatility": 0.19310451594556335,
+          "max_drawdown": 0.2138439250084929,
           "recovery_days": null,
-          "downside_capture_vs_spy": 0.9410813030400844
+          "downside_capture_vs_spy": 0.9410828060064222
         }
       }
     },
@@ -529,80 +551,58 @@
       "series": {
         "Black_CEO_Net": {
           "sessions": 769,
-          "cumulative_return": 1.1036550188696546,
-          "annualized_return": 0.27596336270417154,
-          "excess_cumulative_vs_spy": 0.36197710392428917,
-          "annualized_volatility": 0.19488133349283046,
-          "max_drawdown": 0.1764541644809055,
+          "cumulative_return": 1.103654802542731,
+          "annualized_return": 0.27596331970614996,
+          "excess_cumulative_vs_spy": 0.36197732734761323,
+          "annualized_volatility": 0.19488137228189834,
+          "max_drawdown": 0.17645415681478055,
           "recovery_days": 95,
-          "downside_capture_vs_spy": 0.7850940396467824
+          "downside_capture_vs_spy": 0.7850940480753771
         },
         "Convex_Quality_Net": {
           "sessions": 763,
           "cumulative_return": 0.7323299687549969,
           "annualized_return": 0.19898508954693672,
-          "excess_cumulative_vs_spy": -0.1792966863579104,
+          "excess_cumulative_vs_spy": -0.179296203697892,
           "annualized_volatility": 0.17710090624665373,
           "max_drawdown": 0.1670625866744559,
           "recovery_days": 82,
-          "downside_capture_vs_spy": 0.6849667383104007
+          "downside_capture_vs_spy": 0.6849665451418033
         },
         "SPY_Daily": {
           "sessions": 769,
-          "cumulative_return": 0.7416779149453654,
-          "annualized_return": 0.1994019633265225,
+          "cumulative_return": 0.7416774751951178,
+          "annualized_return": 0.19940186408869653,
           "excess_cumulative_vs_spy": 0.0,
-          "annualized_volatility": 0.15651689037353125,
-          "max_drawdown": 0.18755235013533877,
+          "annualized_volatility": 0.1565169364109184,
+          "max_drawdown": 0.18755251649128013,
           "recovery_days": 54,
           "downside_capture_vs_spy": 1.0
         },
         "RSP_Daily": {
           "sessions": 769,
-          "cumulative_return": 0.6292268084150903,
-          "annualized_return": 0.17345379764315738,
-          "excess_cumulative_vs_spy": -0.11245110653027512,
-          "annualized_volatility": 0.1402407522473217,
-          "max_drawdown": 0.17809527900020333,
+          "cumulative_return": 0.6292280880053671,
+          "annualized_return": 0.17345409965881897,
+          "excess_cumulative_vs_spy": -0.11244938718975073,
+          "annualized_volatility": 0.1402407505558506,
+          "max_drawdown": 0.17809527900020386,
           "recovery_days": 63,
-          "downside_capture_vs_spy": 0.7442239323302584
+          "downside_capture_vs_spy": 0.7442245655931223
         }
       }
     }
   ],
-  "timeseries_arima": {
-    "series_name": "Black_CEO_Net_Excess",
-    "oos_sessions": 6511,
-    "ljung_box_pvalues": {
-      "lag_1": 0.116406155739125,
-      "lag_5": 1.442597143063326e-23,
-      "lag_10": 1.2499367950208775e-21,
-      "lag_21": 6.096572748115102e-23
-    },
-    "arima_order": [
-      1,
-      0,
-      1
-    ],
-    "mean_benchmark_rmse": 0.026588281435581344,
-    "arima_oos_rmse": 0.026595586199891313,
-    "arima_oos_r2": -0.0005495479479851184,
-    "arima_directional_accuracy": 0.5120565197358317,
-    "arimax_oos_rmse": 0.026622791041350655,
-    "arimax_oos_r2": -0.002597535406707596,
-    "arimax_directional_accuracy": 0.5168176931346952
-  },
   "timeseries_walk_forward_overlay": {
     "target_ann_vol": 0.2,
     "oos_sessions": 6511,
-    "qlike_loss": 1.6706823302948255,
-    "unscaled_cagr": 0.14488125928199325,
-    "unscaled_ann_vol": 0.42202387148540726,
-    "unscaled_sharpe": 0.4679071189209711,
-    "unscaled_mdd": 0.7269407152524059,
-    "vol_targeted_cagr": 0.09518417483540897,
-    "vol_targeted_ann_vol": 0.1994940272909991,
-    "vol_targeted_sharpe": 0.4792462642954692,
-    "vol_targeted_mdd": 0.5121531612362027
+    "qlike_loss": 1.6528352380113114,
+    "unscaled_cagr": 0.144881386616192,
+    "unscaled_ann_vol": 0.42202389039123284,
+    "unscaled_sharpe": 0.46790736375346076,
+    "unscaled_mdd": 0.7269408422957028,
+    "vol_targeted_cagr": 0.09075977921734957,
+    "vol_targeted_ann_vol": 0.19729195913784564,
+    "vol_targeted_sharpe": 0.46213407045610017,
+    "vol_targeted_mdd": 0.5136380154168046
   }
 }
