@@ -95,8 +95,9 @@ def run_daily_pipeline(force: bool = False) -> None:
 
     for mod in (
         "src.backtest",
-        "src.monte_carlo",
-        "src.time_series_models",
+        "src.attribution",
+        "src.bootstrap",
+        "src.timeseries",
         "src.export_web_payload",
     ):
         run_step(mod)
