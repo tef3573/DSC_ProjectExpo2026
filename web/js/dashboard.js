@@ -380,6 +380,13 @@
       refreshAllCharts();
     } catch (err) {
       console.error("Failed to load dashboard payload:", err);
+      const center = document.getElementById("main-content");
+      if (center) {
+        center.insertAdjacentHTML(
+          "afterbegin",
+          '<div class="bb-narrator-bar" role="alert"><strong class="bb-red">TELEMETRY ERROR:</strong> Unable to load <code>data/dashboard_payload.json</code>. Run <code>python -m src.export_web_payload</code> and serve via HTTP.</div>'
+        );
+      }
     }
   }
 
