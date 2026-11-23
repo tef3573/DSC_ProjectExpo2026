@@ -1,7 +1,7 @@
 """
 src/export_web_payload.py
 Aggregates backtest, roster tenure analytics, factor attribution, Monte Carlo bootstrap,
-and GARCH(1,1) diagnostics into web/data/dashboard_payload.json for the interactive UI.
+and GARCH(1,1) diagnostics into web/data/dashboard_payload.json for the Bloomberg UI.
 """
 from __future__ import annotations
 
@@ -105,7 +105,7 @@ def _compute_tenure_stats(
 def _format_dossier_row(
     idx: int,
     row: pd.Series,
-    active_final: pd.Series,
+    active_cutoff: pd.Timestamp,
     equal_weight_final: float,
     prices_df: pd.DataFrame,
 ) -> Dict[str, Any]:
@@ -114,11 +114,7 @@ def _format_dossier_row(
     ceo = str(row["ceo_name"]).strip()
     start_ts = pd.to_datetime(row["start_date"])
     end_ts = pd.to_datetime(row["end_date"])
-    is_active = bool(
-        ticker in active_final.index
-        and bool(active_final[ticker])
-        and end_ts >= pd.Timestamp("2026-10-31")
-    )
+    is_active = bool(end_ts >= active_cutoff and ticker not in DELISTED_TICKERS)
     palette = PORTRAIT_PALETTE[idx % len(PORTRAIT_PALETTE)]
 
     return {
@@ -144,15 +140,22 @@ def _format_dossier_row(
 def build_ceo_dossiers(
     roster_df: pd.DataFrame,
     prices_df: pd.DataFrame,
-    mask_df: pd.DataFrame,
 ) -> List[Dict[str, Any]]:
     """Compute tenure analytics, peak stock prices, sparklines, and status per CEO."""
-    active_final = mask_df.loc[mask_df.index[-1]]
-    active_count = int(active_final.sum())
+    end_dates = pd.to_datetime(roster_df["end_date"])
+    active_cutoff = end_dates.max()
+    active_count = int(
+        sum(
+            1
+            for _, r in roster_df.iterrows()
+            if pd.to_datetime(r["end_date"]) >= active_cutoff
+            and str(r["ticker"]).strip().upper() not in DELISTED_TICKERS
+        )
+    )
     equal_weight_final = round(100.0 / active_count, 2) if active_count > 0 else 0.0
 
     return [
-        _format_dossier_row(idx, row, active_final, equal_weight_final, prices_df)
+        _format_dossier_row(idx, row, active_cutoff, equal_weight_final, prices_df)
         for idx, row in roster_df.iterrows()
     ]
 
@@ -191,9 +194,14 @@ def _build_time_series_bundle(results_df: pd.DataFrame) -> Dict[str, Any]:
     else:
         rsp_wealth = [None] * len(dates)
 
+    count_col = (
+        "Active_Constituents_Nt"
+        if "Active_Constituents_Nt" in results_df.columns
+        else "Active_Count"
+    )
     active_counts = (
-        results_df["Active_Count"].fillna(0).astype(int).tolist()
-        if "Active_Count" in results_df.columns
+        results_df[count_col].fillna(0).astype(int).tolist()
+        if count_col in results_df.columns
         else [0] * len(dates)
     )
 
@@ -218,21 +226,20 @@ def export_web_payload(output_path: Path = WEB_DATA_DIR / "dashboard_payload.jso
     """Build and write unified dashboard_payload.json and sync summary_metrics.json."""
     roster_df = pd.read_csv(DATA_DIR / "black_ceo_roster.csv")
     prices_df = pd.read_csv(DATA_DIR / "prices_daily.csv", index_col=0, parse_dates=True)
-    mask_df = pd.read_csv(DATA_DIR / "universe_mask.csv", index_col=0, parse_dates=True)
     results_df = pd.read_csv(DATA_DIR / "backtest_results.csv", index_col=0, parse_dates=True)
 
     summary_metrics = json.loads((DATA_DIR / "summary_metrics.json").read_text(encoding="utf-8"))
     mc_results = json.loads((DATA_DIR / "mc_results.json").read_text(encoding="utf-8"))
     ts_diag = json.loads((DATA_DIR / "timeseries_diagnostics.json").read_text(encoding="utf-8"))
     if "timeseries_garch" not in summary_metrics:
-        summary_metrics["timeseries_garch"] = ts_diag.get("garch_symmetric", {})
+        summary_metrics["timeseries_garch"] = ts_diag.get("garch_1_1", {})
         (DATA_DIR / "summary_metrics.json").write_text(
             json.dumps(summary_metrics, indent=2) + "\n",
             encoding="utf-8",
         )
     ff5_df = pd.read_csv(DATA_DIR / "factor_loadings.csv")
 
-    dossiers = build_ceo_dossiers(roster_df, prices_df, mask_df)
+    dossiers = build_ceo_dossiers(roster_df, prices_df)
     ts_bundle = _build_time_series_bundle(results_df)
 
     payload: Dict[str, Any] = {

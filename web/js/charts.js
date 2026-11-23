@@ -3,25 +3,25 @@ window.BlackCeoCharts = (function () {
   "use strict";
 
   const BASE_LAYOUT = {
-    paper_bgcolor: "rgba(0,0,0,0)",
-    plot_bgcolor: "rgba(6,9,15,0.55)",
+    paper_bgcolor: "#000000",
+    plot_bgcolor: "#05070a",
     font: {
-      family: "JetBrains Mono, SFMono-Regular, Menlo, monospace",
+      family: "JetBrains Mono, Courier New, Menlo, monospace",
       color: "#cbd5e1",
-      size: 11,
+      size: 10.5,
     },
-    margin: { t: 24, r: 20, b: 40, l: 56 },
+    margin: { t: 22, r: 16, b: 36, l: 52 },
     xaxis: {
-      gridcolor: "rgba(30,41,59,0.65)",
-      zerolinecolor: "rgba(51,65,85,0.8)",
+      gridcolor: "#1e2530",
+      zerolinecolor: "#383e47",
     },
     yaxis: {
-      gridcolor: "rgba(30,41,59,0.65)",
-      zerolinecolor: "rgba(51,65,85,0.8)",
+      gridcolor: "#1e2530",
+      zerolinecolor: "#383e47",
     },
     legend: {
       orientation: "h",
-      y: 1.08,
+      y: 1.1,
       x: 0,
       bgcolor: "rgba(0,0,0,0)",
     },
@@ -77,23 +77,23 @@ window.BlackCeoCharts = (function () {
         name: stratLabel,
         type: "scatter",
         mode: "lines",
-        line: { color: "#00e676", width: 2.3 },
+        line: { color: "#00e676", width: 2 },
       },
       {
         x: spyWin.x,
         y: opts.range ? rebaseSeries(spyWin.y) : spyWin.y,
-        name: "SPY (S&P 500 Cap-Wtd)",
+        name: "SPY (Cap-Wtd)",
         type: "scatter",
         mode: "lines",
-        line: { color: "#00d4ff", width: 1.8 },
+        line: { color: "#00d4ff", width: 1.6 },
       },
       {
         x: rspWin.x,
         y: opts.range ? rebaseSeries(rspWin.y) : rspWin.y,
-        name: "RSP (S&P 500 Eq-Wtd)",
+        name: "RSP (Eq-Wtd)",
         type: "scatter",
         mode: "lines",
-        line: { color: "#ff9f1c", width: 1.5, dash: "dot" },
+        line: { color: "#ff9f1c", width: 1.4, dash: "dot" },
       },
     ];
 
@@ -123,12 +123,12 @@ window.BlackCeoCharts = (function () {
       {
         x: stratWin.x,
         y: stratWin.y,
-        name: "Black CEO Strategy DD %",
+        name: "Black CEO DD %",
         type: "scatter",
         mode: "lines",
         fill: "tozeroy",
-        fillcolor: "rgba(255, 82, 82, 0.18)",
-        line: { color: "#ff5252", width: 1.6 },
+        fillcolor: "rgba(255, 82, 82, 0.2)",
+        line: { color: "#ff5252", width: 1.5 },
       },
       {
         x: spyWin.x,
@@ -136,7 +136,7 @@ window.BlackCeoCharts = (function () {
         name: "SPY DD %",
         type: "scatter",
         mode: "lines",
-        line: { color: "#64748b", width: 1.3 },
+        line: { color: "#94a3b8", width: 1.2 },
       },
     ];
 
@@ -165,8 +165,8 @@ window.BlackCeoCharts = (function () {
         type: "scatter",
         mode: "lines",
         fill: "tozeroy",
-        fillcolor: "rgba(0, 212, 255, 0.18)",
-        line: { color: "#00d4ff", width: 1.8, shape: "hv" },
+        fillcolor: "rgba(255, 159, 28, 0.2)",
+        line: { color: "#ff9f1c", width: 1.7, shape: "hv" },
       },
     ];
 
@@ -182,15 +182,20 @@ window.BlackCeoCharts = (function () {
     Plotly.react(el, traces, layout, PLOT_CONFIG);
   }
 
-  function renderFF5Factors(elId, payload) {
+  function renderFF5Factors(elId, payload, opts) {
     const el = document.getElementById(elId);
     if (!el || typeof Plotly === "undefined" || !Array.isArray(payload.factor_loadings)) {
       return;
     }
-    const rows = payload.factor_loadings.filter((r) => r.Factor !== "Alpha (Daily)");
-    const factors = rows.map((r) => r.Factor);
-    const betas = rows.map((r) => Number(r.Beta || r.Coefficient || 0));
-    const colors = betas.map((b) => (b >= 0 ? "#00d4ff" : "#ff9f1c"));
+    const targetScheme =
+      opts.strategy === "Convex_Quality_Net" ? "Convex-Quality (Net)" : "Equal-Weight (Net)";
+    const rows = payload.factor_loadings.filter(
+      (r) => r.scheme === targetScheme && !String(r.parameter).startsWith("Alpha")
+    );
+    const factors = rows.map((r) => r.parameter);
+    const betas = rows.map((r) => Number(r.estimate || 0));
+    const tStats = rows.map((r) => `t=${Number(r.t_stat || 0).toFixed(2)}`);
+    const colors = betas.map((b) => (b >= 0 ? "#00e676" : "#ff5252"));
 
     const traces = [
       {
@@ -198,7 +203,7 @@ window.BlackCeoCharts = (function () {
         y: betas,
         type: "bar",
         marker: { color: colors },
-        text: betas.map((b) => b.toFixed(3)),
+        text: betas.map((b, i) => `${b.toFixed(3)} (${tStats[i]})`),
         textposition: "outside",
       },
     ];
@@ -208,56 +213,49 @@ window.BlackCeoCharts = (function () {
       hovermode: "closest",
       yaxis: {
         ...BASE_LAYOUT.yaxis,
-        title: "Factor Beta",
+        title: "Factor Loading (Beta)",
+        range: [-0.45, 1.15],
       },
     };
 
     Plotly.react(el, traces, layout, PLOT_CONFIG);
   }
 
-  function renderMonteCarlo(elId, payload) {
+  function renderMonteCarlo(elId, payload, opts) {
     const el = document.getElementById(elId);
-    if (!el || typeof Plotly === "undefined" || !payload.monte_carlo) {
+    if (!el || typeof Plotly === "undefined" || !payload.monte_carlo?.strategies) {
       return;
     }
-    const mc = payload.monte_carlo;
-    const dist = mc.simulated_cagrs || mc.cagr_distribution || [];
-    const empCagr = Number(mc.empirical_cagr || 0.1299) * (dist[0] > 1 ? 100 : 1);
+    const targetScheme =
+      opts.strategy === "Convex_Quality_Net" ? "Convex-Quality (Net)" : "Equal-Weight (Net)";
+    const cagrBlock = payload.monte_carlo.strategies[targetScheme]?.cagr || {};
+    const empPct = Number(cagrBlock.empirical_value || 0.1299) * 100;
+    const p5 = Number(cagrBlock.ci_lower_95 || 0.082) * 100;
+    const p50 = Number(cagrBlock.bootstrap_mean || 0.104) * 100;
+    const p95 = Number(cagrBlock.ci_upper_95 || 0.128) * 100;
 
     const traces = [
       {
-        x: dist.length ? dist : [0.07, 0.08, 0.09, 0.095, 0.1, 0.105, 0.11, 0.12],
-        type: "histogram",
-        name: "10,000 Random S&P Cohorts",
-        marker: { color: "rgba(100, 116, 139, 0.65)", line: { color: "#94a3b8", width: 1 } },
+        x: ["5th Pct (Null)", "Bootstrap Mean", "95th Pct (Null)", "Black CEO Empirical"],
+        y: [p5, p50, p95, empPct],
+        type: "bar",
+        marker: {
+          color: ["#475569", "#64748b", "#ff9f1c", "#00e676"],
+        },
+        text: [p5, p50, p95, empPct].map((v) => `${v.toFixed(2)}%`),
+        textposition: "outside",
       },
     ];
 
     const layout = {
       ...BASE_LAYOUT,
       hovermode: "closest",
-      shapes: [
-        {
-          type: "line",
-          x0: empCagr,
-          x1: empCagr,
-          y0: 0,
-          y1: 1,
-          yref: "paper",
-          line: { color: "#00e676", width: 2.5, dash: "dash" },
-        },
-      ],
-      annotations: [
-        {
-          x: empCagr,
-          y: 0.95,
-          yref: "paper",
-          text: "Black CEO Empirical",
-          showarrow: true,
-          arrowhead: 2,
-          font: { color: "#00e676", size: 11 },
-        },
-      ],
+      yaxis: {
+        ...BASE_LAYOUT.yaxis,
+        title: "Annualized CAGR (%)",
+        ticksuffix: "%",
+        range: [0, Math.max(empPct, p95) * 1.25],
+      },
     };
 
     Plotly.react(el, traces, layout, PLOT_CONFIG);
