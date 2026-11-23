@@ -211,6 +211,7 @@ window.BlackCeoCharts = (function () {
     const layout = {
       ...BASE_LAYOUT,
       hovermode: "closest",
+      xaxis: { ...BASE_LAYOUT.xaxis, type: "category" },
       yaxis: {
         ...BASE_LAYOUT.yaxis,
         title: "Factor Loading (Beta)",
@@ -250,6 +251,7 @@ window.BlackCeoCharts = (function () {
     const layout = {
       ...BASE_LAYOUT,
       hovermode: "closest",
+      xaxis: { ...BASE_LAYOUT.xaxis, type: "category" },
       yaxis: {
         ...BASE_LAYOUT.yaxis,
         title: "Annualized CAGR (%)",
