@@ -66,3 +66,5 @@ Every figure returned by `src/charts.py` is serialized via `export_figure_json(f
 """
 Path("docs/web_architecture.md").write_text(doc_text, encoding="utf-8")
 print("Wrote docs/web_architecture.md")
+
+---

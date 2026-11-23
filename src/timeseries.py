@@ -8,6 +8,7 @@ Sub-issue #250:
 - Pre-2010 vs. Post-2010 sub-period GARCH & return/risk attribution (CAGR, Sharpe, Sortino, MDD)
 """
 from dataclasses import dataclass
+from functools import lru_cache
 import json
 import math
 from pathlib import Path
@@ -271,7 +272,7 @@ def _prepare_clean_returns(
     return clean
 
 
-def fit_garch_11(
+def _fit_garch_11_uncached(
     returns: pd.Series,
     series_name: Optional[str] = None,
     active_mask: Optional[pd.Series] = None,
@@ -310,7 +311,7 @@ def fit_garch_11(
     )
 
 
-def fit_gjr_garch_11(
+def _fit_gjr_garch_11_uncached(
     returns: pd.Series,
     series_name: Optional[str] = None,
     active_mask: Optional[pd.Series] = None,
@@ -527,8 +528,6 @@ def _cli_main() -> None:
     print("\n" + format_scorecard_table(json.loads(out_path.read_text(encoding="utf-8"))))
 
 
-if __name__ == "__main__":
-    _cli_main()
 
 
 @dataclass(frozen=True)
@@ -605,7 +604,7 @@ def _compute_causal_garch_forecasts(
     return forecast_daily
 
 
-def run_walk_forward_garch_overlay(
+def _run_walk_forward_garch_overlay_uncached(
     returns: pd.Series,
     target_ann_vol: float = 0.20,
     min_train_sessions: int = 252,
@@ -649,3 +648,204 @@ def run_walk_forward_garch_overlay(
         forecast_vol_ann=pd.Series(oos_fcast_ann, index=oos_ret.index, name="GARCH_OOS_Vol_Ann"),
         overlay_returns_net=net_overlay,
     )
+
+
+def _series_fingerprint(series: pd.Series) -> Tuple[str, int, float, float, float]:
+    """Compute a lightweight O(1) content fingerprint for bounded LRU memoization."""
+    clean = series.dropna().to_numpy(dtype=np.float64)
+    if clean.size == 0:
+        return (str(series.name or ""), 0, 0.0, 0.0, 0.0)
+    return (
+        str(series.name or ""),
+        int(clean.size),
+        float(clean[0]),
+        float(clean[-1]),
+        float(np.sum(clean)),
+    )
+
+
+@lru_cache(maxsize=8)
+def _cached_garch_11(
+    fingerprint: Tuple[str, int, float, float, float],
+    values_bytes: bytes,
+    index_values: Tuple[object, ...],
+    series_name: Optional[str],
+    active_mask_bytes: Optional[bytes],
+) -> GarchFitResult:
+    """Bounded LRU cache for full-horizon GARCH(1,1) MLE fits (<2 MB RAM cap)."""
+    arr = np.frombuffer(values_bytes, dtype=np.float64)
+    idx = pd.Index(index_values)
+    series = pd.Series(arr, index=idx, name=fingerprint[0] or None)
+    mask = (
+        pd.Series(np.frombuffer(active_mask_bytes, dtype=bool), index=idx)
+        if active_mask_bytes is not None
+        else None
+    )
+    return _fit_garch_11_uncached(series, series_name=series_name, active_mask=mask)
+
+
+@lru_cache(maxsize=8)
+def _cached_gjr_garch_11(
+    fingerprint: Tuple[str, int, float, float, float],
+    values_bytes: bytes,
+    index_values: Tuple[object, ...],
+    series_name: Optional[str],
+    active_mask_bytes: Optional[bytes],
+) -> GarchFitResult:
+    """Bounded LRU cache for full-horizon GJR-GARCH(1,1) MLE fits (<2 MB RAM cap)."""
+    arr = np.frombuffer(values_bytes, dtype=np.float64)
+    idx = pd.Index(index_values)
+    series = pd.Series(arr, index=idx, name=fingerprint[0] or None)
+    mask = (
+        pd.Series(np.frombuffer(active_mask_bytes, dtype=bool), index=idx)
+        if active_mask_bytes is not None
+        else None
+    )
+    return _fit_gjr_garch_11_uncached(series, series_name=series_name, active_mask=mask)
+
+
+@lru_cache(maxsize=4)
+def _cached_walk_forward_garch(
+    fingerprint: Tuple[str, int, float, float, float],
+    values_bytes: bytes,
+    index_values: Tuple[object, ...],
+    config: Tuple[float, int, int, float],
+) -> WalkForwardVolResult:
+    """Bounded LRU cache for causal walk-forward GARCH(1,1) overlay simulations."""
+    target_ann_vol, min_train_sessions, refit_step, transaction_cost_bps = config
+    arr = np.frombuffer(values_bytes, dtype=np.float64)
+    series = pd.Series(arr, index=pd.Index(index_values), name=fingerprint[0] or None)
+    return _run_walk_forward_garch_overlay_uncached(
+        series,
+        target_ann_vol=target_ann_vol,
+        min_train_sessions=min_train_sessions,
+        refit_step=refit_step,
+        transaction_cost_bps=transaction_cost_bps,
+    )
+
+
+def fit_garch_11(
+    returns: pd.Series,
+    series_name: Optional[str] = None,
+    active_mask: Optional[pd.Series] = None,
+) -> GarchFitResult:
+    """Fit symmetric GARCH(1,1) via MLE with bounded O(1) memoization across all sessions."""
+    arr = np.ascontiguousarray(returns.to_numpy(dtype=np.float64))
+    mask_bytes = (
+        np.ascontiguousarray(
+            active_mask.reindex(returns.index).fillna(False).to_numpy(dtype=bool)
+        ).tobytes()
+        if active_mask is not None
+        else None
+    )
+    return _cached_garch_11(
+        _series_fingerprint(returns),
+        arr.tobytes(),
+        tuple(returns.index),
+        series_name,
+        mask_bytes,
+    )
+
+
+def fit_gjr_garch_11(
+    returns: pd.Series,
+    series_name: Optional[str] = None,
+    active_mask: Optional[pd.Series] = None,
+) -> GarchFitResult:
+    """Fit asymmetric GJR-GARCH(1,1) via MLE with bounded O(1) memoization across all sessions."""
+    arr = np.ascontiguousarray(returns.to_numpy(dtype=np.float64))
+    mask_bytes = (
+        np.ascontiguousarray(
+            active_mask.reindex(returns.index).fillna(False).to_numpy(dtype=bool)
+        ).tobytes()
+        if active_mask is not None
+        else None
+    )
+    return _cached_gjr_garch_11(
+        _series_fingerprint(returns),
+        arr.tobytes(),
+        tuple(returns.index),
+        series_name,
+        mask_bytes,
+    )
+
+
+def run_walk_forward_garch_overlay(
+    returns: pd.Series,
+    target_ann_vol: float = 0.20,
+    min_train_sessions: int = 252,
+    refit_step: int = 63,
+    transaction_cost_bps: float = 10.0,
+) -> WalkForwardVolResult:
+    """Run causal 1-step-ahead GARCH(1,1) vol-targeted overlay with bounded LRU memoization."""
+    arr = np.ascontiguousarray(returns.to_numpy(dtype=np.float64))
+    return _cached_walk_forward_garch(
+        _series_fingerprint(returns),
+        arr.tobytes(),
+        tuple(returns.index),
+        (target_ann_vol, min_train_sessions, refit_step, transaction_cost_bps),
+    )
+
+
+def export_timeseries_diagnostics(
+    results_path: Path = Path(__file__).resolve().parent.parent / "data" / "backtest_results.csv",
+    output_path: Path = (
+        Path(__file__).resolve().parent.parent / "data" / "timeseries_diagnostics.json"
+    ),
+    target_ann_vol: float = 0.20,
+) -> Path:
+    """
+    Export full-horizon GARCH(1,1), GJR-GARCH(1,1), sub-period regime attribution,
+    macro event windows, walk-forward vol-targeted overlay, and ARIMA/ARIMAX
+    diagnostics to strict UTF-8 JSON (`data/timeseries_diagnostics.json`).
+    """
+    # pylint: disable=import-outside-toplevel
+    from src.arima_diagnostics import run_walk_forward_arima_diagnostics
+    from src.macro_regimes import evaluate_macro_regimes
+
+    df = pd.read_csv(results_path, index_col=0, parse_dates=True)
+    target_cols = [
+        col for col in ("Black_CEO_Net", "Convex_Quality_Net", "SPY_Daily") if col in df.columns
+    ]
+
+    garch_summary = {col: fit_garch_11(df[col].dropna()).to_dict() for col in target_cols}
+    gjr_summary = {col: fit_gjr_garch_11(df[col].dropna()).to_dict() for col in target_cols}
+    wf_overlay = run_walk_forward_garch_overlay(
+        df["Black_CEO_Net"].dropna(), target_ann_vol=target_ann_vol
+    )
+    arima_diag = run_walk_forward_arima_diagnostics(df["Black_CEO_Net"].dropna())
+
+    payload = {
+        "horizon_start": str(df.index.min().date()),
+        "horizon_end": str(df.index.max().date()),
+        "total_sessions": int(len(df)),
+        "garch_1_1": garch_summary,
+        "gjr_garch_1_1": gjr_summary,
+        "subperiod_attribution": dict(
+            zip(
+                ("pre_2010", "post_2010"),
+                fit_subperiod_garch_attribution(results_path=results_path),
+            )
+        ),
+        "macro_regimes": evaluate_macro_regimes(results_path=results_path),
+        "walk_forward_vol_overlay": wf_overlay.to_dict(),
+        "arima_predictability": arima_diag.to_dict(),
+    }
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(
+            payload,
+            indent=2,
+            allow_nan=False,
+            default=lambda obj: obj.to_dict() if hasattr(obj, "to_dict") else str(obj),
+        ) + "\n",
+        encoding="utf-8",
+    )
+    return output_path
+
+
+if __name__ == "__main__":
+    _cli_main()
+    out_file = export_timeseries_diagnostics()
+    print(f"Exported time-series diagnostics JSON to {out_file}")
