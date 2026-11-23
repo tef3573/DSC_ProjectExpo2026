@@ -3,13 +3,18 @@ tests/test_timeseries.py
 Unit and integration tests for GARCH(1,1), GJR-GARCH(1,1), walk-forward volatility
 targeting (#251), ARIMA/ARIMAX diagnostics (#252), and macro regime attribution.
 """
+import json
+from pathlib import Path
+import tempfile
 import unittest
 import numpy as np
 import pandas as pd
 
 from src.arima_diagnostics import run_walk_forward_arima_diagnostics
+from src.charts import build_conditional_volatility_figure, export_figure_json
 from src.macro_regimes import evaluate_macro_regimes
 from src.timeseries import (
+    export_timeseries_diagnostics,
     compute_subperiod_performance_metrics,
     fit_garch_11,
     fit_gjr_garch_11,
@@ -98,6 +103,42 @@ class TestTimeSeriesModels(unittest.TestCase):
         sample_perf = compute_subperiod_performance_metrics(pd.Series([0.01, -0.005, 0.008]))
         self.assertIn("sharpe_ratio", sample_perf)
         self.assertIn("sortino_ratio", sample_perf)
+
+
+    def test_synthetic_garch_parameter_recovery_and_stationarity(self) -> None:
+        """Verify synthetic GARCH(1,1) MLE parameter recovery and stationarity."""
+        rng = np.random.default_rng(123)
+        n_obs = 2500
+        omega_true, alpha_true, beta_true = 1.5e-6, 0.12, 0.84
+        eps = np.zeros(n_obs)
+        sigma2 = np.full(n_obs, omega_true / (1.0 - alpha_true - beta_true))
+        for idx in range(1, n_obs):
+            sigma2[idx] = (
+                omega_true + alpha_true * (eps[idx - 1] ** 2) + beta_true * sigma2[idx - 1]
+            )
+            eps[idx] = rng.normal(0.0, np.sqrt(sigma2[idx]))
+
+        fit_res = fit_garch_11(
+            pd.Series(eps, index=pd.bdate_range("2012-01-01", periods=n_obs), name="Synth")
+        )
+        self.assertLess(fit_res.params.persistence, 1.0)
+        self.assertAlmostEqual(fit_res.params.alpha, alpha_true, delta=0.06)
+        self.assertAlmostEqual(fit_res.params.beta, beta_true, delta=0.08)
+
+    def test_timeseries_diagnostics_and_volatility_chart_json_serialization(self) -> None:
+        """Verify JSON export of timeseries_diagnostics.json and conditional_volatility.json."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            diag_out = export_timeseries_diagnostics(output_path=tmp_path / "ts_diag.json")
+            diag_payload = json.loads(diag_out.read_text(encoding="utf-8"))
+            self.assertIn("garch_1_1", diag_payload)
+            self.assertIn("walk_forward_vol_overlay", diag_payload)
+
+            fig = build_conditional_volatility_figure()
+            fig_out = export_figure_json(fig, tmp_path / "conditional_volatility.json")
+            fig_payload = json.loads(fig_out.read_text(encoding="utf-8"))
+            self.assertIn("data", fig_payload)
+            self.assertGreaterEqual(len(fig_payload["data"]), 3)
 
 
 if __name__ == "__main__":

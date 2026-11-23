@@ -15,6 +15,8 @@ from typing import Any, Dict, Optional
 import pandas as pd
 import plotly.graph_objects as go
 
+from src.timeseries import fit_garch_11, run_walk_forward_garch_overlay
+
 BASE_DIR: Path = Path(__file__).resolve().parent.parent
 DATA_DIR: Path = BASE_DIR / "data"
 BACKTEST_RESULTS_PATH: Path = DATA_DIR / "backtest_results.csv"
@@ -341,6 +343,89 @@ def build_active_constituent_count_figure(
     return fig
 
 
+def build_conditional_volatility_figure(
+    results_path: Path = BACKTEST_RESULTS_PATH,
+    target_ann_vol: float = 0.20,
+) -> go.Figure:
+    """
+    Build interactive GARCH(1,1) annualized conditional volatility comparison across
+    Black_CEO_Net, Convex_Quality_Net, SPY_Daily, and the causal 1-step-ahead OOS forecast.
+    """
+    df = pd.read_csv(results_path, index_col=0, parse_dates=True)
+    fig = go.Figure()
+
+    garch_specs = [
+        ("Black_CEO_Net", "Black CEO Equal-Weight GARCH(1,1)", "#D4AF37", 2.2, "solid"),
+        ("Convex_Quality_Net", "Black CEO Convex-Quality GARCH(1,1)", "#1B9E77", 2.0, "solid"),
+        ("SPY_Daily", "SPY Benchmark GARCH(1,1)", "#2B5C8F", 1.8, "solid"),
+    ]
+    for col, label, color, width, dash in garch_specs:
+        if col not in df.columns:
+            continue
+        fit_res = fit_garch_11(df[col].dropna())
+        vol_pct = fit_res.conditional_vol_annualized * 100.0
+        fig.add_trace(
+            go.Scatter(
+                x=vol_pct.index,
+                y=vol_pct.values,
+                mode="lines",
+                name=label,
+                line={"color": color, "width": width, "dash": dash},
+                hovertemplate="%{x|%Y-%m-%d}<br>" + label + ": %{y:.2f}%<extra></extra>",
+            )
+        )
+
+    if "Black_CEO_Net" in df.columns:
+        wf_res = run_walk_forward_garch_overlay(
+            df["Black_CEO_Net"].dropna(), target_ann_vol=target_ann_vol
+        )
+        oos_vol_pct = wf_res.forecast_vol_ann * 100.0
+        fig.add_trace(
+            go.Scatter(
+                x=oos_vol_pct.index,
+                y=oos_vol_pct.values,
+                mode="lines",
+                name="Causal 1-Step-Ahead OOS Forecast",
+                line={"color": "#A855F7", "width": 1.6, "dash": "dot"},
+                hovertemplate="%{x|%Y-%m-%d}<br>OOS 1-Step Forecast: %{y:.2f}%<extra></extra>",
+            )
+        )
+
+    fig.add_hline(
+        y=target_ann_vol * 100.0,
+        line_width=1.4,
+        line_dash="dash",
+        line_color="#D95F02",
+        annotation_text=f"Vol-Target Ceiling ({target_ann_vol:.0%} Ann. Vol)",
+        annotation_position="top left",
+    )
+
+    fig.update_layout(
+        title={
+            "text": (
+                "GARCH(1,1) Annualized Conditional Volatility & Causal OOS Forecast (2000–2026)"
+            ),
+            "x": 0.02,
+            "xanchor": "left",
+            "y": 0.96,
+        },
+        template="plotly_white",
+        hovermode="x unified",
+        height=460,
+        margin={"l": 60, "r": 30, "t": 100, "b": 50},
+        xaxis={
+            "title": "Trading Date",
+            "rangeselector": _build_date_rangeselector(),
+            "rangeslider": {"visible": False},
+        },
+        yaxis={
+            "title": "Annualized Conditional Volatility (%)",
+            "rangemode": "tozero",
+        },
+    )
+    return fig
+
+
 def export_figure_json(fig: go.Figure, output_path: Path) -> Path:
     """Serialize a Plotly Figure to strict UTF-8 JSON and validate its schema contract."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -366,3 +451,9 @@ if __name__ == "__main__":
         breadth_fig, CHARTS_OUTPUT_DIR / "active_constituent_count.json"
     )
     print(f"Exported active constituent count figure JSON to {breadth_out}")
+
+    cond_vol_fig = build_conditional_volatility_figure()
+    cond_vol_out = export_figure_json(
+        cond_vol_fig, CHARTS_OUTPUT_DIR / "conditional_volatility.json"
+    )
+    print(f"Exported conditional volatility figure JSON to {cond_vol_out}")
