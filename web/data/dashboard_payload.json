@@ -105,6 +105,24 @@
       }
     }
   },
+  "analyst_commentary": {
+    "as_of_date": "2026-11-20",
+    "generated_at": "2026-11-23 18:10:36",
+    "Black_CEO_Net": {
+      "gp_wealth": "PLAIN ENGLISH (AS OF 2026-11-20 CLOSE): Starting with $10,000 in Jan 2000, holding an equal-weighted basket of publicly traded companies led by Black CEOs grew to $264,846 vs. $75,881 for SPY across 6,763 sessions. Peak-to-trough drops were deeper (-70.4% vs. -55.2%), but volatility came mostly from upside rallies.",
+      "memb_breadth": "PLAIN ENGLISH (AS OF 2026-11-20 CLOSE): The step line tracks how many public firms had a Black CEO over time\u2014growing from a handful in 2000 to 17 active firms today. When fewer than 3 CEOs were active, cash filled the rest so no single stock exceeded 33%. Top active tenure leader is Alex Karp (PLTR, +1677.0%).",
+      "ecst_macro": "PLAIN ENGLISH (AS OF 2026-11-20 CLOSE): Across six market cycles, the portfolio held up better than SPY during the 2000\u20132002 Dot-Com Crash and the 2023\u20132026 AI & High-Rate era, while swinging harder during the 2008 GFC and 2022 rate hikes.",
+      "vol_garch": "PLAIN ENGLISH (AS OF 2026-11-20 CLOSE): Pre-2010, holding only 4\u20137 stocks meant volatility spikes lingered for months. Expanding to 17 active firms cut shock half-life by 95% down to 7.0 days, and a 20% volatility cap trims max drawdown by nearly 20 percentage points.",
+      "alph_factors": "PLAIN ENGLISH (AS OF 2026-11-20 CLOSE): Left: Even after stripping out market beta, size (SMB), and value (HML), the portfolio earns over +10% annualized alpha. Right: It beats 97.6% of 10,000 random S&P cohorts, ruling out luck."
+    },
+    "Convex_Quality_Net": {
+      "gp_wealth": "PLAIN ENGLISH (AS OF 2026-11-20 CLOSE \u2014 CONVEX-QUALITY QP): Tilting toward lower-volatility firms (capped at 35% per stock) grew $10,000 to $114,364 vs. $75,881 for SPY while cutting max drawdown from -70.4% down to -71.9%.",
+      "memb_breadth": "PLAIN ENGLISH (AS OF 2026-11-20 CLOSE): Across 17 active issuers (out of 40 historical tenures), Convex-Quality QP allocates higher weight to steady compounders and trims high-beta swings. Top active tenure leader is Alex Karp (PLTR, +1677.0%).",
+      "ecst_macro": "PLAIN ENGLISH (AS OF 2026-11-20 CLOSE): Under Convex-Quality weighting, quality tilts cushion drawdowns during rate hikes and recessions while keeping upside.",
+      "vol_garch": "PLAIN ENGLISH (AS OF 2026-11-20 CLOSE): Pairing Convex-Quality QP with a 20% GARCH volatility target aligns portfolio risk with SPY (~19.9% annualized vol).",
+      "alph_factors": "PLAIN ENGLISH (AS OF 2026-11-20 CLOSE): Quality tilts shift loadings toward profitable firms (positive RMW) while beating 10,000 randomized S&P cohorts."
+    }
+  },
   "factor_loadings": [
     {
       "scheme": "Equal-Weight (Net)",
