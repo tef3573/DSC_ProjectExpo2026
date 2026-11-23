@@ -27,11 +27,19 @@ html,
 body {
   margin: 0;
   padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
   background-color: var(--bg-canvas);
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.38;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
 }
 
 .sr-only {
@@ -49,6 +57,7 @@ body {
 
 /* Top Classic Bloomberg Terminal Bars */
 .bb-window-bar {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -60,6 +69,7 @@ body {
 }
 
 .bb-context-bar {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -93,13 +103,14 @@ body {
 }
 
 .bb-help-line {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 2px 8px;
   background: #000000;
   border-bottom: 1px solid #0284c7;
-  font-size: 12px;
+  font-size: 11.5px;
 }
 
 .bb-cmd-link {
@@ -107,12 +118,16 @@ body {
   border: none;
   color: #e2e8f0;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11.5px;
   cursor: pointer;
 }
 
 .bb-cmd-link:hover {
   color: var(--accent-amber);
+}
+
+.topbar {
+  flex-shrink: 0;
 }
 
 .bb-bi-bar {
@@ -121,13 +136,12 @@ body {
   align-items: center;
   background: var(--accent-red-bar);
   border-bottom: 1px solid #000000;
-  min-height: 26px;
+  min-height: 25px;
 }
 
 .bb-bi-bar__left {
   display: flex;
   align-items: stretch;
-  flex-wrap: wrap;
 }
 
 .bb-search-box {
@@ -135,6 +149,7 @@ body {
   padding: 2px 6px;
   display: flex;
   align-items: center;
+  gap: 4px;
 }
 
 .bb-search-input {
@@ -144,12 +159,19 @@ body {
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: 12px;
-  min-width: 220px;
+  width: 175px;
   outline: none;
 }
 
-.bb-search-input::placeholder {
-  color: #1f2937;
+.bb-go-btn {
+  background: #000000;
+  color: var(--accent-amber);
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  cursor: pointer;
 }
 
 .bb-red-btn {
@@ -178,7 +200,6 @@ body {
 
 .bb-sub-bar {
   display: flex;
-  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
@@ -189,7 +210,6 @@ body {
 
 .bb-sub-bar__left {
   display: flex;
-  flex-wrap: wrap;
   gap: 14px;
   align-items: center;
 }
@@ -205,7 +225,6 @@ body {
 
 .bb-sub-bar__controls {
   display: flex;
-  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
 }
@@ -230,11 +249,23 @@ body {
   cursor: pointer;
 }
 
-/* 3-Pane Workstation Grid */
+.bb-inline-search {
+  background: #11161f;
+  color: #f3f4f6;
+  border: 1px solid var(--border-grid);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  width: 210px;
+}
+
+/* 3-Pane Viewport-Locked Workstation */
 .bb-workstation {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 185px minmax(0, 1fr) 295px;
-  min-height: calc(100vh - 125px);
+  overflow: hidden;
   border-bottom: 1px solid var(--border-grid);
 }
 
@@ -252,6 +283,7 @@ body {
   border-right: 1px solid var(--border-grid);
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
 
 .bb-sidebar__heading {
@@ -272,7 +304,7 @@ body {
   color: var(--accent-amber);
   border: none;
   border-bottom: 1px solid #262e3b;
-  padding: 4px 10px;
+  padding: 5px 10px;
   font-family: var(--font-mono);
   font-size: 11.5px;
   cursor: pointer;
@@ -282,25 +314,57 @@ body {
 .bb-nav-item--active {
   background: #0f172a;
   color: #ffffff;
+  font-weight: 700;
   border-left: 3px solid var(--accent-amber);
 }
 
-/* Center Workspace */
+/* Center Multi-Screen Stage */
 .bb-center {
   background: #000000;
   padding: 6px;
-  display: flex;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.bb-screen {
+  display: none;
+  height: 100%;
+  min-height: 0;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.bb-screen--active {
+  display: flex;
+  animation: bbFadeIn 0.16s ease-out;
+}
+
+@keyframes bbFadeIn {
+  from { opacity: 0.25; }
+  to { opacity: 1; }
 }
 
 .bb-pane {
   background: #05070a;
   border: 1px solid var(--border-grid);
   padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+.bb-pane--grow {
+  flex: 1;
+  min-height: 0;
+}
+
+.bb-pane--scroll {
+  overflow-y: auto;
 }
 
 .bb-pane__header {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -324,7 +388,16 @@ body {
 .bb-pane__meta {
   color: var(--text-secondary);
   font-size: 11px;
-  margin: 2px 0 0;
+  display: block;
+}
+
+.bb-narrator-bar {
+  flex-shrink: 0;
+  border: 1px solid var(--accent-orange-bar);
+  background: #090c10;
+  padding: 5px 8px;
+  font-size: 11px;
+  color: #f3f4f6;
 }
 
 .bb-playbook-hero {
@@ -386,7 +459,7 @@ body {
 .kpi-card {
   background: #0b0f17;
   border: 1px solid var(--border-subtle);
-  padding: 4px 6px;
+  padding: 5px 6px;
   display: flex;
   flex-direction: column;
 }
@@ -407,11 +480,21 @@ body {
   font-size: 10px;
 }
 
-.panel-grid--primary,
+.panel-grid--primary {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 8px;
+}
+
 .panel-grid--equal {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+.bb-charts-fill {
+  flex: 1;
+  min-height: 0;
 }
 
 .pill-switch {
@@ -437,26 +520,33 @@ body {
 
 .chart-stage {
   width: 100%;
-  min-height: 290px;
+  height: 100%;
+  min-height: 220px;
 }
 
-.chart-stage--compact {
-  min-height: 245px;
+.bb-chart-tall {
+  min-height: 260px;
 }
 
 /* Numbered Bloomberg Feed */
 .bb-feed-list {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
+  overflow-y: auto;
 }
 
 .bb-feed-row {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  padding: 2px 4px;
+  padding: 4px 6px;
   border-bottom: 1px solid #151a22;
+  cursor: pointer;
+}
+
+.bb-feed-row:hover {
+  background: #111827;
 }
 
 .bb-feed-row__num {
@@ -472,6 +562,7 @@ body {
 .bb-feed-row__val {
   color: var(--accent-cyan);
   white-space: nowrap;
+  font-weight: 700;
 }
 
 /* Data Tables */
@@ -487,6 +578,8 @@ body {
 }
 
 .data-table th {
+  position: sticky;
+  top: 0;
   text-align: left;
   background: #141922;
   color: #ffffff;
@@ -505,12 +598,15 @@ body {
   background: #111827;
 }
 
-.num {
-  white-space: nowrap;
-}
-
+.num { white-space: nowrap; }
 .num--pos { color: var(--accent-green); }
 .num--neg { color: var(--accent-red); }
+
+.roster-filters {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
 
 .exec-cell {
   display: flex;
@@ -520,13 +616,13 @@ body {
 }
 
 .exec-avatar {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 11px;
+  font-size: 10.5px;
   border: 1px solid #475569;
   flex-shrink: 0;
 }
@@ -582,14 +678,29 @@ body {
   flex-direction: column;
   gap: 6px;
   padding: 4px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .bb-rail-box {
   border: 1px solid var(--border-grid);
   background: #05070a;
+  display: flex;
+  flex-direction: column;
+}
+
+.bb-rail-box--grow {
+  flex: 1;
+  min-height: 0;
+}
+
+.bb-rail-scroll {
+  flex: 1;
+  overflow-y: auto;
 }
 
 .bb-rail-header {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -617,23 +728,20 @@ body {
   padding: 2px 6px;
   border-bottom: 1px solid #151a22;
   font-size: 11px;
+  cursor: pointer;
 }
 
 .bb-rail-row:hover {
   background: #111827;
 }
 
-.bb-rail-num {
-  color: #ffffff;
-}
-
+.bb-rail-num { color: #ffffff; }
 .bb-rail-name {
   color: var(--accent-amber);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .bb-rail-val {
   text-align: right;
   font-weight: 700;
@@ -641,15 +749,15 @@ body {
 
 /* Footer */
 .footer {
+  flex-shrink: 0;
   background: #090c10;
-  padding: 8px 12px;
+  padding: 3px 10px;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 10.5px;
 }
 
 .footer__inner {
   display: flex;
-  flex-wrap: wrap;
   justify-content: space-between;
   gap: 8px;
 }
@@ -659,29 +767,22 @@ body {
   .bb-workstation {
     grid-template-columns: 210px minmax(0, 1fr) 330px;
   }
-
-  .chart-stage {
-    min-height: 360px;
-  }
 }
 
 @media (max-width: 1200px) {
+  html, body {
+    height: auto;
+    overflow: auto;
+  }
   .bb-workstation {
     grid-template-columns: 1fr;
+    overflow: visible;
   }
-
-  .bb-sidebar,
-  .bb-right-rail {
-    border: none;
-    border-bottom: 1px solid var(--border-grid);
-  }
-
   .panel-grid--primary,
   .panel-grid--equal,
   .bb-playbook-hero {
     grid-template-columns: 1fr;
   }
-
   .kpi-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }

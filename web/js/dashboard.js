@@ -13,8 +13,18 @@
     ai_high_rate_regime: { start: "2023-10-30", end: "2026-12-31" },
   };
 
+  const PAGE_TITLES = {
+    "01": "01 OVERVIEW",
+    "02": "02 EQUITY & DRAWDOWN",
+    "03": "03 UNIVERSE BREADTH",
+    "04": "04 MACRO REGIMES",
+    "05": "05 FF5 & BOOTSTRAP",
+    "06": "06 40-CEO ROSTER",
+  };
+
   const state = {
     payload: null,
+    activePage: "01",
     strategy: "Black_CEO_Net",
     regime: "full_horizon",
     scale: "log",
@@ -43,35 +53,55 @@
     </svg>`;
   }
 
+  function switchPage(pageId) {
+    if (!PAGE_TITLES[pageId]) return;
+    state.activePage = pageId;
+
+    document.querySelectorAll(".bb-screen").forEach((el) => {
+      el.classList.toggle("bb-screen--active", el.id === `screen-${pageId}`);
+    });
+    document.querySelectorAll(".bb-nav-item[data-page]").forEach((btn) => {
+      btn.classList.toggle("bb-nav-item--active", btn.getAttribute("data-page") === pageId);
+    });
+    const badge = document.getElementById("bb-active-screen-badge");
+    if (badge) badge.textContent = PAGE_TITLES[pageId];
+
+    const cmdInput = document.getElementById("bb-cmd-input");
+    if (cmdInput) cmdInput.value = `${Number(pageId)}<GO>`;
+
+    requestAnimationFrame(() => {
+      refreshAllCharts();
+      window.dispatchEvent(new Event("resize"));
+    });
+  }
+
   function renderRightRail(payload) {
     const driversEl = document.getElementById("rail-drivers");
     const metricsEl = document.getElementById("rail-metrics");
     const constEl = document.getElementById("rail-constituents");
-    if (!driversEl || !metricsEl || !constEl || !payload) {
-      return;
-    }
+    if (!driversEl || !metricsEl || !constEl || !payload) return;
 
     const eqSeries = payload.series.wealth_10k.Black_CEO_Net.slice(-30);
     const ddSeries = payload.series.drawdown_pct.Black_CEO_Net.slice(-30);
     const ntSeries = payload.series.active_count.slice(-30);
 
     const drivers = [
-      { num: "31)", name: "Net CAGR (2000-26)", val: "12.99%", cls: "bb-green", pts: eqSeries, pos: true },
-      { num: "32)", name: "Wealth Multiple", val: "26.48x", cls: "bb-amber", pts: eqSeries, pos: true },
-      { num: "33)", name: "Jensen Alpha (SPY)", val: "+10.27%", cls: "bb-green", pts: eqSeries, pos: true },
-      { num: "34)", name: "Post-2010 CAGR", val: "16.62%", cls: "bb-green", pts: eqSeries, pos: true },
-      { num: "35)", name: "Active Black CEOs", val: "17", cls: "bb-cyan", pts: ntSeries, pos: true },
+      { num: "31)", name: "Net CAGR (2000-26)", val: "12.99%", cls: "bb-green", pts: eqSeries, pos: true, page: "02" },
+      { num: "32)", name: "Wealth Multiple", val: "26.48x", cls: "bb-amber", pts: eqSeries, pos: true, page: "02" },
+      { num: "33)", name: "Jensen Alpha (SPY)", val: "+10.27%", cls: "bb-green", pts: eqSeries, pos: true, page: "05" },
+      { num: "34)", name: "Post-2010 CAGR", val: "16.62%", cls: "bb-green", pts: eqSeries, pos: true, page: "04" },
+      { num: "35)", name: "Active Black CEOs", val: "17", cls: "bb-cyan", pts: ntSeries, pos: true, page: "03" },
     ];
 
     const metrics = [
-      { num: "36)", name: "Annualized Vol", val: "38.32%", cls: "bb-amber", pts: ddSeries, pos: false },
-      { num: "37)", name: "Max Drawdown", val: "70.44%", cls: "bb-red", pts: ddSeries, pos: false },
-      { num: "38)", name: "Sharpe / Sortino", val: "0.45/0.84", cls: "bb-amber", pts: eqSeries, pos: true },
-      { num: "39)", name: "GARCH(1,1) a+b", val: "0.9982", cls: "bb-amber", pts: ddSeries, pos: false },
-      { num: "40)", name: "Post-2010 GARCH HL", val: "7.0d", cls: "bb-green", pts: eqSeries, pos: true },
+      { num: "36)", name: "Annualized Vol", val: "38.32%", cls: "bb-amber", pts: ddSeries, pos: false, page: "04" },
+      { num: "37)", name: "Max Drawdown", val: "70.44%", cls: "bb-red", pts: ddSeries, pos: false, page: "02" },
+      { num: "38)", name: "Sharpe / Sortino", val: "0.45/0.84", cls: "bb-amber", pts: eqSeries, pos: true, page: "04" },
+      { num: "39)", name: "GARCH(1,1) a+b", val: "0.9982", cls: "bb-amber", pts: ddSeries, pos: false, page: "04" },
+      { num: "40)", name: "Post-2010 GARCH HL", val: "7.0d", cls: "bb-green", pts: eqSeries, pos: true, page: "03" },
     ];
 
-    const renderIndicatorRow = (item) => `<div class="bb-rail-row">
+    const renderIndicatorRow = (item) => `<div class="bb-rail-row" data-jump-page="${item.page}">
       <span class="bb-rail-num">${item.num}</span>
       <span class="bb-rail-name">${item.name}</span>
       <span>${buildSparklineSvg(item.pts, item.pos)}</span>
@@ -80,6 +110,10 @@
 
     driversEl.innerHTML = drivers.map(renderIndicatorRow).join("");
     metricsEl.innerHTML = metrics.map(renderIndicatorRow).join("");
+
+    document.querySelectorAll("[data-jump-page]").forEach((row) => {
+      row.addEventListener("click", () => switchPage(row.getAttribute("data-jump-page")));
+    });
 
     const activeDossiers = payload.ceo_dossiers.filter((d) => d.status === "ACTIVE");
     constEl.innerHTML = activeDossiers
@@ -94,7 +128,7 @@
           valStr = `${d.current_weight_pct.toFixed(2)}%`;
           cls = "bb-cyan";
         }
-        return `<div class="bb-rail-row">
+        return `<div class="bb-rail-row" data-ceo-ticker="${d.ticker}">
           <span class="bb-rail-num">${51 + idx})</span>
           <span class="bb-rail-name" title="${d.ceo_name} (${d.company_name})">${d.ticker} &bull; ${d.ceo_name.split(" ").slice(-1)[0]}</span>
           <span>${buildSparklineSvg(d.sparkline, ret >= 0)}</span>
@@ -102,40 +136,50 @@
         </div>`;
       })
       .join("");
+
+    constEl.querySelectorAll("[data-ceo-ticker]").forEach((row) => {
+      row.addEventListener("click", () => {
+        const t = row.getAttribute("data-ceo-ticker");
+        state.search = t;
+        const searchEl = document.getElementById("roster-search");
+        if (searchEl) searchEl.value = t;
+        renderRosterTable(state.payload);
+        switchPage("06");
+      });
+    });
   }
 
-  function renderResearchFeed(payload) {
+  function renderResearchFeed() {
     const feedEl = document.getElementById("bb-research-feed");
-    if (!feedEl) {
-      return;
-    }
+    if (!feedEl) return;
     const items = [
-      { n: "1)", text: "Full-Horizon Net CAGR outpaces SPY (+515 bps) & RSP (+198 bps)", val: "12.99%" },
-      { n: "2)", text: "Post-2010 Modern Universe CAGR accelerates as Nt expands to 17", val: "16.62%" },
-      { n: "3)", text: "Convex-Quality QP Optimizer compresses volatility by -1,351 bps", val: "24.81%" },
-      { n: "4)", text: "Fama-French 5-Factor Annualized Alpha (Newey-West HAC t=1.51)", val: "+10.52%" },
-      { n: "5)", text: "GARCH(1,1) post-2010 volatility shock half-life drops 95%", val: "7.0d" },
-      { n: "6)", text: "AI & High-Rate Regime (2023–2026) cumulative return vs SPY +74.2%", val: "+110.4%" },
-      { n: "7)", text: "Top Active Tenure Performer: Alex Karp (PLTR) since Sep 2020", val: "+1,680%" },
-      { n: "8)", text: "Top Healthcare Tenure Performer: Herriot Tabuteau (AXSM)", val: "+1,513%" },
+      { n: "1)", text: "Full-Horizon Net CAGR outpaces SPY (+515 bps) & RSP (+198 bps)", val: "12.99%", page: "02" },
+      { n: "2)", text: "Post-2010 Modern Universe CAGR accelerates as Nt expands to 17", val: "16.62%", page: "03" },
+      { n: "3)", text: "Convex-Quality QP Optimizer compresses volatility by -1,351 bps", val: "24.81%", page: "04" },
+      { n: "4)", text: "Fama-French 5-Factor Annualized Alpha (Newey-West HAC t=1.51)", val: "+10.52%", page: "05" },
+      { n: "5)", text: "GARCH(1,1) post-2010 volatility shock half-life drops 95%", val: "7.0d", page: "04" },
+      { n: "6)", text: "AI & High-Rate Regime (2023–2026) cumulative return vs SPY +74.2%", val: "+110.4%", page: "04" },
+      { n: "7)", text: "Top Active Tenure Performer: Alex Karp (PLTR) since Sep 2020", val: "+1,680%", page: "06" },
+      { n: "8)", text: "Top Healthcare Tenure Performer: Herriot Tabuteau (AXSM)", val: "+1,513%", page: "06" },
     ];
     feedEl.innerHTML = items
       .map(
-        (it) => `<div class="bb-feed-row">
+        (it) => `<div class="bb-feed-row" data-feed-page="${it.page}">
           <span class="bb-feed-row__num">${it.n}</span>
           <span class="bb-feed-row__text">${it.text}</span>
           <span class="bb-feed-row__val">${it.val}</span>
         </div>`
       )
       .join("");
+    feedEl.querySelectorAll("[data-feed-page]").forEach((row) => {
+      row.addEventListener("click", () => switchPage(row.getAttribute("data-feed-page")));
+    });
   }
 
   function renderMacroTable(payload) {
     const tbody = document.getElementById("macro-regime-tbody");
     const regimes = payload?.timeseries_diagnostics?.macro_regimes;
-    if (!tbody || !Array.isArray(regimes)) {
-      return;
-    }
+    if (!tbody || !Array.isArray(regimes)) return;
     const stratKey = state.strategy || "Black_CEO_Net";
     tbody.innerHTML = regimes
       .map((r) => {
@@ -164,17 +208,11 @@
 
   function renderRosterTable(payload) {
     const tbody = document.getElementById("roster-tbody");
-    if (!tbody || !Array.isArray(payload?.ceo_dossiers)) {
-      return;
-    }
+    if (!tbody || !Array.isArray(payload?.ceo_dossiers)) return;
     const query = state.search.trim().toLowerCase();
     const filtered = payload.ceo_dossiers.filter((d) => {
-      if (state.statusFilter !== "ALL" && d.status !== state.statusFilter) {
-        return false;
-      }
-      if (!query) {
-        return true;
-      }
+      if (state.statusFilter !== "ALL" && d.status !== state.statusFilter) return false;
+      if (!query) return true;
       return (
         d.ticker.toLowerCase().includes(query) ||
         d.ceo_name.toLowerCase().includes(query) ||
@@ -221,9 +259,7 @@
   }
 
   function refreshAllCharts() {
-    if (!state.payload || !window.BlackCeoCharts) {
-      return;
-    }
+    if (!state.payload || !window.BlackCeoCharts) return;
     const opts = {
       strategy: state.strategy,
       scale: state.scale,
@@ -243,6 +279,24 @@
     const statusFilter = document.getElementById("roster-status-filter");
     const railModeSelect = document.getElementById("rail-metric-mode");
     const toggleSidebarBtn = document.getElementById("toggle-sidebar-btn");
+    const cmdForm = document.getElementById("bb-cmd-form");
+    const cmdInput = document.getElementById("bb-cmd-input");
+
+    if (cmdForm && cmdInput) {
+      cmdForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const raw = cmdInput.value.trim();
+        const numMatch = raw.match(/^0?([1-6])/);
+        if (numMatch) {
+          switchPage(`0${numMatch[1]}`);
+        } else {
+          state.search = raw;
+          if (rosterSearch) rosterSearch.value = raw;
+          renderRosterTable(state.payload);
+          switchPage("06");
+        }
+      });
+    }
 
     if (strategySelect) {
       strategySelect.addEventListener("change", (e) => {
@@ -286,51 +340,41 @@
     if (toggleSidebarBtn) {
       toggleSidebarBtn.addEventListener("click", () => {
         const ws = document.getElementById("bb-workstation");
-        if (ws) {
-          ws.classList.toggle("bb-workstation--collapsed");
-        }
+        if (ws) ws.classList.toggle("bb-workstation--collapsed");
+        window.dispatchEvent(new Event("resize"));
       });
     }
 
-    document.querySelectorAll("[data-jump]").forEach((btn) => {
+    document.querySelectorAll("[data-page]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        document.querySelectorAll(".bb-nav-item").forEach((b) => b.classList.remove("bb-nav-item--active"));
-        if (btn.classList.contains("bb-nav-item")) {
-          btn.classList.add("bb-nav-item--active");
+        const targetPage = btn.getAttribute("data-page");
+        const nextStatus = btn.getAttribute("data-filter-status");
+        if (nextStatus) {
+          state.statusFilter = nextStatus;
+          if (statusFilter) statusFilter.value = nextStatus;
+          renderRosterTable(state.payload);
         }
-        const target = document.getElementById(btn.getAttribute("data-jump"));
-        if (target) {
-          target.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
+        switchPage(targetPage);
       });
     });
 
-    document.querySelectorAll("[data-filter-status]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const nextStatus = btn.getAttribute("data-filter-status");
-        state.statusFilter = nextStatus;
-        if (statusFilter) {
-          statusFilter.value = nextStatus;
-        }
-        renderRosterTable(state.payload);
-        const target = document.getElementById("section-roster");
-        if (target) {
-          target.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      });
+    window.addEventListener("keydown", (e) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "SELECT") return;
+      if (["1", "2", "3", "4", "5", "6"].includes(e.key)) {
+        switchPage(`0${e.key}`);
+      }
     });
   }
 
   async function init() {
     bindControls();
+    renderResearchFeed();
     try {
       const resp = await fetch("data/dashboard_payload.json");
-      if (!resp.ok) {
-        return;
-      }
+      if (!resp.ok) return;
       state.payload = await resp.json();
       renderRightRail(state.payload);
-      renderResearchFeed(state.payload);
       renderMacroTable(state.payload);
       renderRosterTable(state.payload);
       refreshAllCharts();
