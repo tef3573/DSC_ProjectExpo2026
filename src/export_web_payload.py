@@ -265,8 +265,8 @@ def _build_analyst_commentary(
                 f"PLAIN ENGLISH (AS OF {end_date} CLOSE): Starting with $10,000 in Jan 2000, "
                 f"holding an equal-weighted basket of publicly traded companies led by Black CEOs "
                 f"grew to ${wealth['Black_CEO_Net'][-1]:,.0f} vs. ${wealth['SPY'][-1]:,.0f} for "
-                f"SPY across {sessions:,} sessions. Peak-to-trough drops were deeper (-{eq_mdd:.1f}% "
-                f"vs. -{spy_mdd:.1f}%), but volatility came mostly from upside rallies."
+                f"SPY across {sessions:,} sessions. Peak-to-trough drops were deeper "
+                f"(-{eq_mdd:.1f}% vs. -{spy_mdd:.1f}%), with volatility driven by upside rallies."
             ),
             "memb_breadth": (
                 f"PLAIN ENGLISH (AS OF {end_date} CLOSE): The step line tracks how many public "
@@ -294,9 +294,9 @@ def _build_analyst_commentary(
         "Convex_Quality_Net": {
             "gp_wealth": (
                 f"PLAIN ENGLISH (AS OF {end_date} CLOSE — CONVEX-QUALITY QP): Tilting toward "
-                f"lower-volatility firms (capped at 35% per stock) grew $10,000 to "
-                f"${wealth['Convex_Quality_Net'][-1]:,.0f} vs. ${wealth['SPY'][-1]:,.0f} for SPY "
-                f"while cutting max drawdown from -{eq_mdd:.1f}% down to -{cq_mdd:.1f}%."
+                f"lower-volatility firms (capped at 35% per stock) grew $10,000 into "
+                f"${wealth['Convex_Quality_Net'][-1]:,.0f} vs. ${wealth['SPY'][-1]:,.0f} "
+                f"for SPY while cutting max drawdown from -{eq_mdd:.1f}% to -{cq_mdd:.1f}%."
             ),
             "memb_breadth": (
                 f"PLAIN ENGLISH (AS OF {end_date} CLOSE): Across {active_now} active issuers (out "

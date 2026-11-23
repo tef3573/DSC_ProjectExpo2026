@@ -54,5 +54,42 @@
     "alpha_annual": 0.08188525644586118,
     "tracking_error": 0.3566486066641774
   },
-  "timeseries_garch": {}
+  "timeseries_garch": {
+    "Black_CEO_Net": {
+      "n_obs": 6763,
+      "mu": 0.0007377169726997317,
+      "omega": 1.0995191259827788e-05,
+      "alpha": 0.22020834294285999,
+      "gamma": 0.0,
+      "beta": 0.7776898179817406,
+      "persistence": 0.9978981609246006,
+      "half_life_days": 329.43458483725277,
+      "unconditional_ann_vol": 1.1481587334988166,
+      "log_likelihood": 18579.102491362235
+    },
+    "Convex_Quality_Net": {
+      "n_obs": 6757,
+      "mu": 0.0005379974914943191,
+      "omega": 7.746460806673142e-06,
+      "alpha": 0.21230631386674156,
+      "gamma": 0.0,
+      "beta": 0.7864255954402894,
+      "persistence": 0.998731909307031,
+      "half_life_days": 546.2602988198545,
+      "unconditional_ann_vol": 1.240728552972147,
+      "log_likelihood": 19267.420674001285
+    },
+    "SPY_Daily": {
+      "n_obs": 6763,
+      "mu": 0.0003732770116742367,
+      "omega": 2.6665237478925056e-06,
+      "alpha": 0.12767946053399115,
+      "gamma": 0.0,
+      "beta": 0.8528293220159915,
+      "persistence": 0.9805087825499826,
+      "half_life_days": 35.21431538335456,
+      "unconditional_ann_vol": 0.185675035230134,
+      "log_likelihood": 21857.194495180192
+    }
+  }
 }
