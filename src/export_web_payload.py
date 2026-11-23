@@ -293,8 +293,8 @@ def _build_analyst_commentary(
         },
         "Convex_Quality_Net": {
             "gp_wealth": (
-                f"PLAIN ENGLISH (AS OF {end_date} CLOSE — CONVEX-QUALITY QP): Tilting toward "
-                f"lower-volatility firms (capped at 35% per stock) grew $10,000 into "
+                f"PLAIN ENGLISH ({end_date} CLOSE — CONVEX-QUALITY QP): Tilting toward "
+                f"lower-volatility firms (35% max position cap) grew $10,000 into "
                 f"${wealth['Convex_Quality_Net'][-1]:,.0f} vs. ${wealth['SPY'][-1]:,.0f} "
                 f"for SPY while cutting max drawdown from -{eq_mdd:.1f}% to -{cq_mdd:.1f}%."
             ),
