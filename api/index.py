@@ -8,6 +8,7 @@ import json
 import mimetypes
 from pathlib import Path
 import sys
+from urllib.parse import urlsplit
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 WEB_DIR = ROOT_DIR / "web"
@@ -17,9 +18,22 @@ if str(ROOT_DIR) not in sys.path:
 from src.terminal_server import fetch_live_market_snapshot  # noqa: E402
 
 
+def _extract_request_path(environ) -> str:
+    """Resolve the original client URL path across Vercel WSGI headers."""
+    raw_uri = (
+        environ.get("HTTP_X_NOW_ROUTE_MATCHES")
+        and environ.get("REQUEST_URI")
+        or environ.get("REQUEST_URI")
+        or environ.get("RAW_URI")
+        or environ.get("PATH_INFO")
+        or "/"
+    )
+    return urlsplit(raw_uri).path or "/"
+
+
 def app(environ, start_response):
     """Standard PEP 3333 WSGI application for Vercel."""
-    path = environ.get("PATH_INFO", "/") or "/"
+    path = _extract_request_path(environ)
 
     if path.startswith("/api/live-market"):
         payload = fetch_live_market_snapshot()
@@ -32,7 +46,7 @@ def app(environ, start_response):
         start_response("200 OK", headers)
         return [body]
 
-    rel_path = "index.html" if path == "/" else path.lstrip("/")
+    rel_path = "index.html" if path in ("/", "/api/index", "/api/index.py") else path.lstrip("/")
     target = (WEB_DIR / rel_path).resolve()
 
     if WEB_DIR.resolve() in target.parents and target.is_file():
@@ -49,6 +63,6 @@ def app(environ, start_response):
         start_response("200 OK", headers)
         return [body]
 
-    not_found = b"Not Found"
-    start_response("404 Not Found", [("Content-Type", "text/plain"), ("Content-Length", str(len(not_found)))])
-    return [not_found]
+    debug = f"Not Found: path={path!r}, web_exists={WEB_DIR.exists()}".encode("utf-8")
+    start_response("404 Not Found", [("Content-Type", "text/plain"), ("Content-Length", str(len(debug)))])
+    return [debug]
