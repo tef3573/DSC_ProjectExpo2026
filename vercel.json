@@ -1,7 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [
-    { "source": "/api/live-market", "destination": "/api/live-market.py" },
-    { "source": "/(.*)", "destination": "/web/$1" }
-  ]
+  "outputDirectory": "web"
 }
