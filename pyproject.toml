@@ -1,2 +1,2 @@
 [tool.vercel]
-entrypoint = "api.live-market:app"
+entrypoint = "api.live_market:app"
