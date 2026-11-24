@@ -324,6 +324,9 @@
   function renderGarch3DSurface(elId, spinAngle, showPoints) {
     const el = document.getElementById(elId);
     if (!el || !window.Plotly) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 40 || rect.height < 40) return;
+
     const shocks = [-3, -2, -1, 0, 1, 2, 3];
     const horizons = [1, 5, 10, 20, 30, 45, 60];
     const zBceos = horizons.map((h) =>
@@ -343,9 +346,10 @@
       })
     );
 
-    const rad = spinAngle || 0.7;
-    const eyeX = 1.65 * Math.cos(rad);
-    const eyeY = 1.65 * Math.sin(rad);
+    const rad = spinAngle || 0.75;
+    const radius = 2.05;
+    const eyeX = radius * Math.cos(rad);
+    const eyeY = radius * Math.sin(rad);
 
     const traces = [
       {
@@ -359,7 +363,7 @@
           [0, "#0b2e1e"],
           [1, "#ff9900"],
         ],
-        opacity: showPoints ? 0.45 : 0.9,
+        opacity: showPoints ? 0.42 : 0.9,
       },
       {
         x: shocks,
@@ -372,7 +376,7 @@
           [0, "#0a2540"],
           [1, "#00d1ff"],
         ],
-        opacity: showPoints ? 0.35 : 0.65,
+        opacity: showPoints ? 0.32 : 0.65,
       },
     ];
 
@@ -394,7 +398,7 @@
           x: px,
           y: py,
           z: pzB,
-          name: "BCEOS Grid Nodes",
+          name: "BCEOS Nodes",
           type: "scatter3d",
           mode: "markers",
           marker: { size: 3.5, color: "#ff9900" },
@@ -403,7 +407,7 @@
           x: px,
           y: py,
           z: pzS,
-          name: "SPY Grid Nodes",
+          name: "SPY Nodes",
           type: "scatter3d",
           mode: "markers",
           marker: { size: 3, color: "#00d1ff" },
@@ -413,13 +417,21 @@
 
     const layout = {
       paper_bgcolor: COLORS.bg,
+      width: Math.floor(rect.width),
+      height: Math.floor(rect.height),
       margin: { l: 0, r: 0, t: 0, b: 0 },
+      showlegend: false,
       font: { family: '"JetBrains Mono", monospace', color: COLORS.text, size: 9 },
       scene: {
-        xaxis: { title: "Shock (σ)", gridcolor: COLORS.grid, backgroundcolor: COLORS.bg },
-        yaxis: { title: "Horizon (d)", gridcolor: COLORS.grid, backgroundcolor: COLORS.bg },
-        zaxis: { title: "Ann Vol %", gridcolor: COLORS.grid, backgroundcolor: COLORS.bg },
-        camera: { eye: { x: eyeX, y: eyeY, z: 0.95 } },
+        domain: { x: [0, 1], y: [0, 1] },
+        aspectmode: "cube",
+        xaxis: { title: "Shock (σ)", range: [-3.2, 3.2], gridcolor: COLORS.grid, backgroundcolor: COLORS.bg },
+        yaxis: { title: "Horizon (d)", range: [0, 62], gridcolor: COLORS.grid, backgroundcolor: COLORS.bg },
+        zaxis: { title: "Vol %", range: [15, 58], gridcolor: COLORS.grid, backgroundcolor: COLORS.bg },
+        camera: {
+          center: { x: 0, y: 0, z: -0.08 },
+          eye: { x: eyeX, y: eyeY, z: 1.05 },
+        },
       },
     };
     window.Plotly.react(el, traces, layout, CONFIG);

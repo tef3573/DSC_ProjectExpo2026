@@ -94,6 +94,7 @@ def run_daily_pipeline(force: bool = False) -> None:
     print(f"Extended active CEO roster through latest session: {latest_session}")
 
     for mod in (
+        "src.universe",
         "src.backtest",
         "src.attribution",
         "src.bootstrap",
