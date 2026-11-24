@@ -1,11 +1,3 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [
-    { "source": "/api/live-market", "destination": "/api/index.py" },
-    { "source": "/", "destination": "/web/index.html" },
-    { "source": "/css/(.*)", "destination": "/web/css/$1" },
-    { "source": "/js/(.*)", "destination": "/web/js/$1" },
-    { "source": "/data/(.*)", "destination": "/web/data/$1" },
-    { "source": "/vendor/(.*)", "destination": "/web/vendor/$1" }
-  ]
+  "$schema": "https://openapi.vercel.sh/vercel.json"
 }
