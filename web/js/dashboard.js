@@ -21,7 +21,7 @@
     selectedRegime: "ALL",
     search: "",
     statusFilter: "ALL",
-    simulateTicks: false,
+    simulateTicks: true,
     prevQuotes: {},
     marketData: null,
     miniCursor: 6763,
