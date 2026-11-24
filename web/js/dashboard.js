@@ -32,6 +32,7 @@
     volPlaying: false,
     garchSpinAngle: 0.7,
     garchAutoSpin: true,
+    garchShowPoints: false,
     shockSign: 1,
     mcResampleOffset: 0,
   };
@@ -418,16 +419,16 @@
       tr.addEventListener("click", () => {
         const rid = tr.getAttribute("data-regime-id");
         const reg = regimes.find((item) => item.regime_id === rid);
-        const ecstBar = document.getElementById("commentary-ecst");
-        if (reg && ecstBar) {
+        const inlineBox = document.getElementById("ecst-inline-detail");
+        if (reg && inlineBox) {
           const s = reg.series?.[state.strategy] || reg.series?.Black_CEO_Net || {};
           const b = reg.series?.SPY_Daily || {};
           const sRet = (Number(s.cumulative_return || 0) * 100).toFixed(2);
           const bRet = (Number(b.cumulative_return || 0) * 100).toFixed(2);
           const rec = s.recovery_days !== null ? `${s.recovery_days} trading days` : "unrecovered within window";
-          ecstBar.innerHTML = `<strong class="bb-amber">[${reg.label.toUpperCase()} DEEP-DIVE]:</strong> `
-            + `BCEOS delivered <strong>${sRet}%</strong> vs. SPX <strong>${bRet}%</strong> with N=${reg.active_constituents_min}–${reg.active_constituents_max} active issuers, `
-            + `a peak drawdown of <strong>${(Number(s.max_drawdown || 0) * 100).toFixed(2)}%</strong> (${rec}), and <strong>${Number(s.downside_capture_vs_spy || 0).toFixed(2)}x</strong> downside capture.`;
+          inlineBox.innerHTML = `<div class="bb-amber bb-bold">[${reg.label.toUpperCase()} — REGIME BRIEFING]</div>`
+            + `<div>During this macro window (${reg.start_date || ""} to ${reg.end_date || ""}), BCEOS returned <strong class="${Number(sRet) >= 0 ? "bb-green" : "bb-red"}">${sRet}%</strong> vs. SPX <strong>${bRet}%</strong> `
+            + `across <strong>N=${reg.active_constituents_min}–${reg.active_constituents_max}</strong> active issuers, with a max drawdown of <strong>${(Number(s.max_drawdown || 0) * 100).toFixed(2)}%</strong> (${rec}) and <strong>${Number(s.downside_capture_vs_spy || 0).toFixed(2)}x</strong> downside capture.</div>`;
         }
       });
     });
@@ -441,8 +442,8 @@
     const ret = dossier.tenure_return_pct;
     body.innerHTML = `
       <div class="bb-ceo-hero">
-        <div class="bb-ceo-avatar" style="color:${dossier.avatar.fg};background:${dossier.avatar.bg};">
-          ${dossier.avatar.initials}
+        <div class="bb-ceo-avatar" style="color:${dossier.avatar.fg};background:${dossier.avatar.bg};overflow:hidden;">
+          ${dossier.avatar.photo_url ? `<img src="${dossier.avatar.photo_url}" alt="${dossier.ceo_name}" style="width:100%;height:100%;object-fit:cover;" onerror="this.remove();" />` : dossier.avatar.initials}
         </div>
         <div>
           <div class="bb-amber bb-bold" style="font-size:13px;">${dossier.ceo_name} &bull; ${dossier.company_name} (${dossier.ticker})</div>
@@ -497,7 +498,12 @@
         const ret = d.tenure_return_pct;
         const stCls = d.status === "ACTIVE" ? "bb-green" : d.status === "DELISTED" ? "bb-amber" : "bb-muted";
         return `<tr class="bb-clickable-row" data-dossier-id="${d.id}">
-          <td><strong class="bb-amber">${d.ticker}</strong> &bull; <strong class="bb-cyan">${d.ceo_name}</strong> <span class="bb-muted">(${d.company_name})</span></td>
+          <td style="display:flex;align-items:center;gap:6px;">
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;font-size:9px;font-weight:700;color:${d.avatar.fg};background:${d.avatar.bg};border:1px solid #363c46;flex-shrink:0;overflow:hidden;">
+              ${d.avatar.photo_url ? `<img src="${d.avatar.photo_url}" alt="${d.ceo_name}" style="width:100%;height:100%;object-fit:cover;" onerror="this.remove();" />` : d.avatar.initials}
+            </span>
+            <span><strong class="bb-amber">${d.ticker}</strong> &bull; <strong class="bb-cyan">${d.ceo_name}</strong> <span class="bb-muted">(${d.company_name})</span></span>
+          </td>
           <td>${d.sector}</td>
           <td>${d.start_date} &rarr; ${d.end_date}</td>
           <td class="${stCls} bb-bold">${d.status}</td>
@@ -533,7 +539,7 @@
     window.BlackCeoCharts.renderConstituentBreadth("chart-constituent-count", state.payload);
     window.BlackCeoCharts.renderSectorBars("chart-sector-bars", state.payload);
     window.BlackCeoCharts.renderEcstRateChart("chart-ecst-rates", state.payload, state.showYieldOverlay);
-    window.BlackCeoCharts.renderGarch3DSurface("chart-garch-3d", state.garchSpinAngle);
+    window.BlackCeoCharts.renderGarch3DSurface("chart-garch-3d", state.garchSpinAngle, state.garchShowPoints);
     window.BlackCeoCharts.renderVolOverlayChart("chart-vol-overlay", state.payload, state.volCursor);
     window.BlackCeoCharts.renderShockDecayChart("chart-shock-decay", state.shockSign);
     window.BlackCeoCharts.renderFF5Factors("chart-ff5-factors", state.payload, gpOpts);
@@ -694,6 +700,15 @@
         spinBtn.textContent = `3D AUTO-SPIN: ${state.garchAutoSpin ? "ON" : "OFF"}`;
       });
     }
+    const ptsBtn = document.getElementById("vol-points-btn");
+    if (ptsBtn) {
+      ptsBtn.addEventListener("click", () => {
+        state.garchShowPoints = !state.garchShowPoints;
+        ptsBtn.classList.toggle("bb-mini-btn--active", state.garchShowPoints);
+        ptsBtn.textContent = `[SHOW POINTS: ${state.garchShowPoints ? "ON" : "OFF"}]`;
+        refreshCharts();
+      });
+    }
     if (shockPos && shockNeg) {
       shockPos.addEventListener("click", () => {
         state.shockSign = 1;
@@ -794,27 +809,27 @@
 
       if (state.miniPlaying) {
         const spd = Number(document.getElementById("des-mini-speed")?.value || 5);
-        state.miniCursor = Math.min(maxLen, state.miniCursor + spd * 14);
+        state.miniCursor = Math.min(maxLen, state.miniCursor + Math.max(1, Math.round(spd * 12)));
         if (state.miniCursor >= maxLen) state.miniPlaying = false;
         renderDesMiniChart();
       }
       if (state.gpPlaying && state.activeScreen === "3") {
         const spd = Number(document.getElementById("gp-speed-select")?.value || 10);
-        state.gpCursor = Math.min(maxLen, state.gpCursor + spd * 12);
+        state.gpCursor = Math.min(maxLen, state.gpCursor + Math.max(1, Math.round(spd * 12)));
         if (state.gpCursor >= maxLen) state.gpPlaying = false;
         updateGpCursorTelemetry();
         refreshCharts();
       }
       if (state.volPlaying && state.activeScreen === "5") {
         const spd = Number(document.getElementById("vol-speed-select")?.value || 10);
-        state.volCursor = Math.min(maxLen, state.volCursor + spd * 12);
+        state.volCursor = Math.min(maxLen, state.volCursor + Math.max(1, Math.round(spd * 12)));
         if (state.volCursor >= maxLen) state.volPlaying = false;
         updateVolCursorReadout();
         refreshCharts();
       }
       if (state.garchAutoSpin && state.activeScreen === "5") {
         state.garchSpinAngle += 0.04;
-        window.BlackCeoCharts?.renderGarch3DSurface("chart-garch-3d", state.garchSpinAngle);
+        window.BlackCeoCharts?.renderGarch3DSurface("chart-garch-3d", state.garchSpinAngle, state.garchShowPoints);
       }
     }, 55);
 

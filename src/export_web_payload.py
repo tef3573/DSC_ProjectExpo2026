@@ -29,6 +29,20 @@ PORTRAIT_PALETTE = (
     ("#40c4ff", "#0c2738"),
 )
 
+CEO_PHOTOS: Dict[str, str] = {
+    "Alex Karp": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Alex_Karp_2020.jpg/240px-Alex_Karp_2020.jpg",
+    "Kenneth Frazier": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Kenneth_Frazier_2012.jpg/240px-Kenneth_Frazier_2012.jpg",
+    "Kenneth Chenault": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Kenneth_Chenault_2011.jpg/240px-Kenneth_Chenault_2011.jpg",
+    "Marvin Ellison": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/73/Marvin_Ellison.jpg/240px-Marvin_Ellison.jpg",
+    "Rosalind Brewer": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f2/Rosalind_Brewer_2019.jpg/240px-Rosalind_Brewer_2019.jpg",
+    "Ursula Burns": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/Ursula_Burns_2010.jpg/240px-Ursula_Burns_2010.jpg",
+    "Arnold Donald": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Arnold_Donald.jpg/240px-Arnold_Donald.jpg",
+    "Franklin Raines": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1d/Franklin_Raines.jpg/240px-Franklin_Raines.jpg",
+    "Richard Parsons": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Richard_Parsons_2011.jpg/240px-Richard_Parsons_2011.jpg",
+    "Stanley O'Neal": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/Stan_O%27Neal.jpg/240px-Stan_O%27Neal.jpg",
+    "Don Thompson": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Don_Thompson_McDonald%27s.jpg/240px-Don_Thompson_McDonald%27s.jpg",
+}
+
 CEO_PROFILES_DB: Dict[str, Dict[str, str]] = {
     "PLTR": {
         "index_membership": "S&P 500 / Russell 1000",
@@ -247,7 +261,7 @@ def _format_dossier_row(
         ),
         "current_weight_pct": equal_weight_final if is_active else 0.0,
         **_compute_tenure_stats(prices_df, ticker, start_ts, end_ts),
-        "avatar": {"initials": _initials(ceo), "fg": palette[0], "bg": palette[1]},
+        "avatar": {"initials": _initials(ceo), "fg": palette[0], "bg": palette[1], "photo_url": CEO_PHOTOS.get(ceo, "")},
         "profile": _build_profile_meta(ticker, sector, ceo, company),
     }
 

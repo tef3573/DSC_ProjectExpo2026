@@ -238,6 +238,8 @@
             <span>2) LIVE MINI-CHART: GROWTH OF $10K (USD)</span>
             <div class="bb-mini-transport">
               <select id="des-mini-speed" class="bb-select" aria-label="Mini Chart Speed">
+                <option value="0.25">0.25x</option>
+                <option value="0.5">0.5x</option>
                 <option value="1">1x</option>
                 <option value="5" selected>5x</option>
                 <option value="15">15x</option>
@@ -372,10 +374,11 @@
           <button type="button" id="gp-play-btn" class="bb-mini-btn">&gt; PLAY</button>
           <button type="button" id="gp-end-btn" class="bb-mini-btn">&gt;| END</button>
           <select id="gp-speed-select" class="bb-select" aria-label="GP Playback Speed">
+            <option value="0.25">0.25x</option>
+            <option value="0.5">0.5x</option>
             <option value="1">1x</option>
-            <option value="5">5x</option>
-            <option value="10" selected>10x</option>
-            <option value="25">25x</option>
+            <option value="5" selected>5x</option>
+            <option value="15">15x</option>
           </select>
           <button type="button" id="gp-gross-toggle" class="bb-mini-btn bb-mini-btn--active">GROSS-VS-NET: ON</button>
           <button type="button" class="bb-mini-btn bb-mini-btn--active" data-scale="log">LOG</button>
@@ -438,7 +441,7 @@
       <div class="bb-grid-2col bb-grid-fill">
         <div class="bb-box bb-box--grow bb-box--scroll">
           <div class="bb-box__hdr">
-            <span>REGIME PERFORMANCE MATRIX (CLICK ANY ROW FOR DEEP-DIVE BRIEFING)</span>
+            <span>REGIME PERFORMANCE MATRIX (CLICK ANY ROW BELOW)</span>
             <span class="bb-amber">WINDOWED RETURN &amp; CAPTURE</span>
           </div>
           <table class="bb-table bb-table--striped" id="macro-regime-table">
@@ -454,6 +457,10 @@
             </thead>
             <tbody id="macro-regime-tbody"></tbody>
           </table>
+          <div class="bb-analyst-callout" id="ecst-inline-detail" style="margin-top:8px;">
+            <div class="bb-amber bb-bold">SELECTED REGIME BRIEFING (CLICK ANY ROW ABOVE):</div>
+            <div>Click any macro era row above to inspect exact window dates, active Black CEO breadth (Nt), drawdown recovery speed, and downside capture vs. S&amp;P 500.</div>
+          </div>
         </div>
 
         <div class="bb-col-stack">
@@ -500,7 +507,7 @@
         <div class="bb-box">
           <div class="bb-box__hdr">
             <span>1) 3D GJR-GARCH IMPULSE SURFACE (BCEOS BOWL VS. SPY V-SKEW)</span>
-            <span class="bb-muted">DRAG TO ORBIT</span>
+            <button type="button" id="vol-points-btn" class="bb-mini-btn">[SHOW POINTS: OFF]</button>
           </div>
           <div id="chart-garch-3d" class="bb-chart-quad"></div>
         </div>
@@ -514,9 +521,11 @@
               <button type="button" id="vol-play-btn" class="bb-mini-btn">&gt;</button>
               <button type="button" id="vol-end-btn" class="bb-mini-btn">&gt;|</button>
               <select id="vol-speed-select" class="bb-select" aria-label="Vol Replay Speed">
+                <option value="0.25">0.25x</option>
+                <option value="0.5">0.5x</option>
                 <option value="1">1x</option>
-                <option value="10" selected>10x</option>
-                <option value="25">25x</option>
+                <option value="5" selected>5x</option>
+                <option value="15">15x</option>
               </select>
             </div>
           </div>

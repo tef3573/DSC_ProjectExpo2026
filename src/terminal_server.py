@@ -2,7 +2,7 @@
 src/terminal_server.py
 Lightweight HTTP server for the 1-BLOOMBERG 2011 Terminal UI.
 Serves static files from web/ and exposes GET /api/live-market backed by yfinance
-and Investopedia/Yahoo financial RSS headlines with a 20-second memory cache.
+and live financial RSS headlines with a 20-second memory cache.
 """
 from __future__ import annotations
 
@@ -40,70 +40,43 @@ RATE_SPECS = [
     ("^TYX", "US 30Y BOND", 5.14, -1.8),
 ]
 
-INVESTOPEDIA_RSS_URL = (
-    "https://feeds-api.dotdashmeredith.com/v1/rss/google/"
-    "f6a0e92b-be8d-4abb-9106-703b04059e19"
-)
+RSS_FEEDS = [
+    ("INVESTOPEDIA", "https://news.google.com/rss/search?q=site:investopedia.com+stock+market&hl=en-US&gl=US&ceid=US:en"),
+    ("MARKET WIRE", "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5EGSPC,%5EDJI,%5EIXIC&region=US&lang=en-US"),
+]
 
 
 def _fetch_live_headlines() -> List[Dict[str, str]]:
-    """Pull live financial headlines from Investopedia RSS and Yahoo Finance."""
+    """Pull live financial headlines from Investopedia/Google News & Yahoo Finance RSS."""
     items: List[Dict[str, str]] = []
-    try:
-        req = urllib.request.Request(
-            INVESTOPEDIA_RSS_URL,
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
-        with urllib.request.urlopen(req, timeout=3.5) as resp:
-            xml_bytes = resp.read()
-        root = ET.fromstring(xml_bytes)
-        for entry in root.findall(".//item")[:5]:
-            title = (entry.findtext("title") or "").strip()
-            link = (entry.findtext("link") or "").strip()
-            if title:
-                items.append(
-                    {
-                        "time": datetime.now().strftime("%H:%M"),
-                        "tag": "INVESTOPEDIA",
-                        "title": title.upper(),
-                        "url": link,
-                    }
-                )
-    except Exception:  # pylint: disable=broad-exception-caught
-        pass
+    for source_tag, url in RSS_FEEDS:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                xml_bytes = resp.read()
+            root = ET.fromstring(xml_bytes)
+            for entry in root.findall(".//item")[:4]:
+                raw_title = (entry.findtext("title") or "").strip()
+                clean_title = raw_title.split(" - ")[0].strip()
+                link = (entry.findtext("link") or "").strip()
+                if clean_title:
+                    items.append(
+                        {
+                            "time": datetime.now().strftime("%H:%M"),
+                            "tag": source_tag,
+                            "title": clean_title.upper(),
+                            "url": link,
+                        }
+                    )
+        except Exception:  # pylint: disable=broad-exception-caught
+            continue
 
-    try:
-        yf_news = yf.Ticker("^GSPC").news or []
-        for raw in yf_news[:6]:
-            content = raw.get("content") if isinstance(raw, dict) else {}
-            title = (
-                (content.get("title") if isinstance(content, dict) else None)
-                or raw.get("title")
-                or ""
-            ).strip()
-            url = (
-                (content.get("canonicalUrl", {}).get("url") if isinstance(content, dict) else None)
-                or raw.get("link")
-                or ""
-            )
-            if title and len(items) < 8:
-                items.append(
-                    {
-                        "time": datetime.now().strftime("%H:%M"),
-                        "tag": "MARKET WIRE",
-                        "title": title.upper(),
-                        "url": url,
-                    }
-                )
-    except Exception:  # pylint: disable=broad-exception-caught
-        pass
-
-    if not items:
-        items = [
+    if len(items) < 4:
+        curated = [
             {
                 "time": "16:45",
                 "tag": "INVESTOPEDIA",
-                "title": "TREASURY YIELDS STABILIZE AS INSTITUTIONAL DESKS REPRICE FED PATH",
+                "title": "S&P 500 & TREASURY YIELDS ADJUST AS INSTITUTIONAL DESKS REPRICE FED PATH",
                 "url": "https://www.investopedia.com/markets-news-4427704",
             },
             {
@@ -115,17 +88,18 @@ def _fetch_live_headlines() -> List[Dict[str, str]]:
             {
                 "time": "15:55",
                 "tag": "MARKET WIRE",
-                "title": "AI INFRASTRUCTURE & HEALTHCARE OUTPERFORM AS VOLATILITY CLUSTERS",
+                "title": "AI INFRASTRUCTURE & HEALTHCARE LEAD SECTOR DISPERSION IN LATE TRADING",
                 "url": "https://www.investopedia.com/trading-news-4689736",
             },
             {
                 "time": "15:30",
                 "tag": "QUANT DESK",
                 "title": "SURVIVORSHIP-BIAS-FREE POINT-IN-TIME INDEXING ELIMINATES LOOK-AHEAD DRIFT",
-                "url": "",
+                "url": "https://www.investopedia.com/terms/s/survivorshipbias.asp",
             },
         ]
-    return items
+        items.extend(curated[: 6 - len(items)])
+    return items[:7]
 
 
 def _fallback_payload() -> Dict[str, Any]:

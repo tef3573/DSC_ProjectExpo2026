@@ -107,7 +107,7 @@
   },
   "analyst_commentary": {
     "as_of_date": "2026-11-20",
-    "generated_at": "2026-11-23 19:52:52",
+    "generated_at": "2026-11-23 21:38:31",
     "Black_CEO_Net": {
       "gp_wealth": "PLAIN ENGLISH (AS OF 2026-11-20 CLOSE): Starting with $10,000 in Jan 2000, holding an equal-weighted basket of publicly traded companies led by Black CEOs grew to $264,846 vs. $75,881 for SPY across 6,763 sessions. Peak-to-trough drops were deeper (-70.4% vs. -55.2%), with volatility driven by upside rallies.",
       "memb_breadth": "PLAIN ENGLISH (AS OF 2026-11-20 CLOSE): Left tracks active Black CEO companies over time (growing from 4 in 2000 to 17 active today). Right breaks down all 40 CEO tenures by sector\u2014led by Healthcare, Financial Services, and Consumer/Tech. Click any CEO row to inspect fundamentals & sources. Top active tenure leader is Alex Karp (PLTR, +1577.5%).",
@@ -1083,7 +1083,8 @@
       "avatar": {
         "initials": "JT",
         "fg": "#00d1ff",
-        "bg": "#0a2540"
+        "bg": "#0a2540",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -1155,7 +1156,8 @@
       "avatar": {
         "initials": "FR",
         "fg": "#00ff00",
-        "bg": "#0b2e1e"
+        "bg": "#0b2e1e",
+        "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1d/Franklin_Raines.jpg/240px-Franklin_Raines.jpg"
       },
       "profile": {
         "index_membership": "Fortune 50 / US GSE",
@@ -1227,7 +1229,8 @@
       "avatar": {
         "initials": "AL",
         "fg": "#ff9900",
-        "bg": "#332200"
+        "bg": "#332200",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -1299,7 +1302,8 @@
       "avatar": {
         "initials": "DW",
         "fg": "#b388ff",
-        "bg": "#21123d"
+        "bg": "#21123d",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -1371,7 +1375,8 @@
       "avatar": {
         "initials": "KC",
         "fg": "#ff6e40",
-        "bg": "#38150a"
+        "bg": "#38150a",
+        "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Kenneth_Chenault_2011.jpg/240px-Kenneth_Chenault_2011.jpg"
       },
       "profile": {
         "index_membership": "DJIA / S&P 500",
@@ -1442,7 +1447,8 @@
       "avatar": {
         "initials": "CO",
         "fg": "#40c4ff",
-        "bg": "#0c2738"
+        "bg": "#0c2738",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -1514,7 +1520,8 @@
       "avatar": {
         "initials": "UB",
         "fg": "#00d1ff",
-        "bg": "#0a2540"
+        "bg": "#0a2540",
+        "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/Ursula_Burns_2010.jpg/240px-Ursula_Burns_2010.jpg"
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -1586,7 +1593,8 @@
       "avatar": {
         "initials": "KF",
         "fg": "#00ff00",
-        "bg": "#0b2e1e"
+        "bg": "#0b2e1e",
+        "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Kenneth_Frazier_2012.jpg/240px-Kenneth_Frazier_2012.jpg"
       },
       "profile": {
         "index_membership": "DJIA / S&P 500",
@@ -1659,7 +1667,8 @@
       "avatar": {
         "initials": "DT",
         "fg": "#ff9900",
-        "bg": "#332200"
+        "bg": "#332200",
+        "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Don_Thompson_McDonald%27s.jpg/240px-Don_Thompson_McDonald%27s.jpg"
       },
       "profile": {
         "index_membership": "DJIA / S&P 500",
@@ -1731,7 +1740,8 @@
       "avatar": {
         "initials": "AD",
         "fg": "#b388ff",
-        "bg": "#21123d"
+        "bg": "#21123d",
+        "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Arnold_Donald.jpg/240px-Arnold_Donald.jpg"
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -1764,7 +1774,8 @@
       "avatar": {
         "initials": "AL",
         "fg": "#ff6e40",
-        "bg": "#38150a"
+        "bg": "#38150a",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "Delisted / Acquired Historical Constituent",
@@ -1836,7 +1847,8 @@
       "avatar": {
         "initials": "MP",
         "fg": "#40c4ff",
-        "bg": "#0c2738"
+        "bg": "#0c2738",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -1909,7 +1921,8 @@
       "avatar": {
         "initials": "ME",
         "fg": "#00d1ff",
-        "bg": "#0a2540"
+        "bg": "#0a2540",
+        "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/73/Marvin_Ellison.jpg/240px-Marvin_Ellison.jpg"
       },
       "profile": {
         "index_membership": "Delisted / Acquired Historical Constituent",
@@ -1981,7 +1994,8 @@
       "avatar": {
         "initials": "HT",
         "fg": "#00ff00",
-        "bg": "#0b2e1e"
+        "bg": "#0b2e1e",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -2053,7 +2067,8 @@
       "avatar": {
         "initials": "CA",
         "fg": "#ff9900",
-        "bg": "#332200"
+        "bg": "#332200",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -2125,7 +2140,8 @@
       "avatar": {
         "initials": "RJ",
         "fg": "#b388ff",
-        "bg": "#21123d"
+        "bg": "#21123d",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -2197,7 +2213,8 @@
       "avatar": {
         "initials": "ME",
         "fg": "#ff6e40",
-        "bg": "#38150a"
+        "bg": "#38150a",
+        "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/73/Marvin_Ellison.jpg/240px-Marvin_Ellison.jpg"
       },
       "profile": {
         "index_membership": "S&P 500 / Fortune 50",
@@ -2269,7 +2286,8 @@
       "avatar": {
         "initials": "LH",
         "fg": "#40c4ff",
-        "bg": "#0c2738"
+        "bg": "#0c2738",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -2341,7 +2359,8 @@
       "avatar": {
         "initials": "JZ",
         "fg": "#00d1ff",
-        "bg": "#0a2540"
+        "bg": "#0a2540",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -2374,7 +2393,8 @@
       "avatar": {
         "initials": "RB",
         "fg": "#00ff00",
-        "bg": "#0b2e1e"
+        "bg": "#0b2e1e",
+        "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f2/Rosalind_Brewer_2019.jpg/240px-Rosalind_Brewer_2019.jpg"
       },
       "profile": {
         "index_membership": "Delisted / Acquired Historical Constituent",
@@ -2446,7 +2466,8 @@
       "avatar": {
         "initials": "RR",
         "fg": "#ff9900",
-        "bg": "#332200"
+        "bg": "#332200",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -2518,7 +2539,8 @@
       "avatar": {
         "initials": "BA",
         "fg": "#b388ff",
-        "bg": "#21123d"
+        "bg": "#21123d",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -2551,7 +2573,8 @@
       "avatar": {
         "initials": "DR",
         "fg": "#ff6e40",
-        "bg": "#38150a"
+        "bg": "#38150a",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "Delisted / Acquired Historical Constituent",
@@ -2623,7 +2646,8 @@
       "avatar": {
         "initials": "YG",
         "fg": "#40c4ff",
-        "bg": "#0c2738"
+        "bg": "#0c2738",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -2697,7 +2721,8 @@
       "avatar": {
         "initials": "FC",
         "fg": "#00d1ff",
-        "bg": "#0a2540"
+        "bg": "#0a2540",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -2769,7 +2794,8 @@
       "avatar": {
         "initials": "CB",
         "fg": "#00ff00",
-        "bg": "#0b2e1e"
+        "bg": "#0b2e1e",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -2841,7 +2867,8 @@
       "avatar": {
         "initials": "CW",
         "fg": "#ff9900",
-        "bg": "#332200"
+        "bg": "#332200",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -2914,7 +2941,8 @@
       "avatar": {
         "initials": "DB",
         "fg": "#b388ff",
-        "bg": "#21123d"
+        "bg": "#21123d",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -2986,7 +3014,8 @@
       "avatar": {
         "initials": "TT",
         "fg": "#ff6e40",
-        "bg": "#38150a"
+        "bg": "#38150a",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -3060,7 +3089,8 @@
       "avatar": {
         "initials": "CM",
         "fg": "#40c4ff",
-        "bg": "#0c2738"
+        "bg": "#0c2738",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -3132,7 +3162,8 @@
       "avatar": {
         "initials": "DF",
         "fg": "#00d1ff",
-        "bg": "#0a2540"
+        "bg": "#0a2540",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -3207,7 +3238,8 @@
       "avatar": {
         "initials": "MB",
         "fg": "#00ff00",
-        "bg": "#0b2e1e"
+        "bg": "#0b2e1e",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -3281,7 +3313,8 @@
       "avatar": {
         "initials": "JH",
         "fg": "#ff9900",
-        "bg": "#332200"
+        "bg": "#332200",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -3355,7 +3388,8 @@
       "avatar": {
         "initials": "PA",
         "fg": "#b388ff",
-        "bg": "#21123d"
+        "bg": "#21123d",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "Fortune 50 / US GSE",
@@ -3427,7 +3461,8 @@
       "avatar": {
         "initials": "FL",
         "fg": "#ff6e40",
-        "bg": "#38150a"
+        "bg": "#38150a",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "S&P 500",
@@ -3499,7 +3534,8 @@
       "avatar": {
         "initials": "AK",
         "fg": "#40c4ff",
-        "bg": "#0c2738"
+        "bg": "#0c2738",
+        "photo_url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Alex_Karp_2020.jpg/240px-Alex_Karp_2020.jpg"
       },
       "profile": {
         "index_membership": "S&P 500 / Russell 1000",
@@ -3571,7 +3607,8 @@
       "avatar": {
         "initials": "RW",
         "fg": "#00d1ff",
-        "bg": "#0a2540"
+        "bg": "#0a2540",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "S&P 500 (Acquired by CVS in 2018)",
@@ -3643,7 +3680,8 @@
       "avatar": {
         "initials": "TL",
         "fg": "#00ff00",
-        "bg": "#0b2e1e"
+        "bg": "#0b2e1e",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "Russell 2000 / Nasdaq Biotech (Acquired by Pfizer)",
@@ -3715,7 +3753,8 @@
       "avatar": {
         "initials": "ED",
         "fg": "#ff9900",
-        "bg": "#332200"
+        "bg": "#332200",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",
@@ -3787,7 +3826,8 @@
       "avatar": {
         "initials": "EB",
         "fg": "#b388ff",
-        "bg": "#21123d"
+        "bg": "#21123d",
+        "photo_url": ""
       },
       "profile": {
         "index_membership": "US Public Equity (NYSE / NASDAQ)",

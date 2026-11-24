@@ -321,7 +321,7 @@
     window.Plotly.react(el, traces, layout, CONFIG);
   }
 
-  function renderGarch3DSurface(elId, spinAngle) {
+  function renderGarch3DSurface(elId, spinAngle, showPoints) {
     const el = document.getElementById(elId);
     if (!el || !window.Plotly) return;
     const shocks = [-3, -2, -1, 0, 1, 2, 3];
@@ -359,7 +359,7 @@
           [0, "#0b2e1e"],
           [1, "#ff9900"],
         ],
-        opacity: 0.9,
+        opacity: showPoints ? 0.45 : 0.9,
       },
       {
         x: shocks,
@@ -372,9 +372,44 @@
           [0, "#0a2540"],
           [1, "#00d1ff"],
         ],
-        opacity: 0.65,
+        opacity: showPoints ? 0.35 : 0.65,
       },
     ];
+
+    if (showPoints) {
+      const px = [];
+      const py = [];
+      const pzB = [];
+      const pzS = [];
+      horizons.forEach((h, hi) => {
+        shocks.forEach((s, si) => {
+          px.push(s);
+          py.push(h);
+          pzB.push(zBceos[hi][si]);
+          pzS.push(zSpy[hi][si]);
+        });
+      });
+      traces.push(
+        {
+          x: px,
+          y: py,
+          z: pzB,
+          name: "BCEOS Grid Nodes",
+          type: "scatter3d",
+          mode: "markers",
+          marker: { size: 3.5, color: "#ff9900" },
+        },
+        {
+          x: px,
+          y: py,
+          z: pzS,
+          name: "SPY Grid Nodes",
+          type: "scatter3d",
+          mode: "markers",
+          marker: { size: 3, color: "#00d1ff" },
+        }
+      );
+    }
 
     const layout = {
       paper_bgcolor: COLORS.bg,
@@ -473,16 +508,31 @@
   function renderFF5Factors(elId, payload, opts) {
     const el = document.getElementById(elId);
     if (!el || !window.Plotly || !payload) return;
-    const target = opts.strategy === "Convex_Quality_Net" ? "Convex-Quality" : "Equal-Weight";
-    const rows = (payload.factor_loadings || []).filter(
-      (r) => String(r.Portfolio || "").includes(target) && r.Factor !== "Alpha (Annualized)"
-    );
-    const factors = rows.map((r) => r.Factor);
-    const betas = rows.map((r) => Number(r.Estimate || 0));
-    const labels = rows.map((r) => {
-      const p = Number(r.P_Value || 1);
+    const target = opts.strategy === "Convex_Quality_Net" ? "convex" : "equal";
+    const allRows = payload.factor_loadings || [];
+    const getVal = (obj, keys) => {
+      for (const k of keys) {
+        if (obj[k] !== undefined && obj[k] !== null) return obj[k];
+      }
+      return null;
+    };
+    let rows = allRows.filter((r) => {
+      const pName = String(getVal(r, ["Portfolio", "portfolio", "strategy"]) || "").toLowerCase();
+      const fName = String(getVal(r, ["Factor", "factor", "term"]) || "");
+      return pName.includes(target) && !fName.toLowerCase().includes("alpha");
+    });
+    if (!rows.length) {
+      rows = allRows
+        .filter((r) => !String(getVal(r, ["Factor", "factor", "term"]) || "").toLowerCase().includes("alpha"))
+        .slice(0, 5);
+    }
+    const factors = rows.map((r) => String(getVal(r, ["Factor", "factor", "term"]) || ""));
+    const betas = rows.map((r) => Number(getVal(r, ["Estimate", "estimate", "Beta", "beta", "coef"]) || 0));
+    const labels = rows.map((r, idx) => {
+      const p = Number(getVal(r, ["P_Value", "p_value", "pvalue", "p"]) ?? 1);
+      const t = Number(getVal(r, ["T_Stat", "t_stat", "tstat", "t"]) ?? 0);
       const stars = p < 0.01 ? "***" : p < 0.05 ? "**" : p < 0.1 ? "*" : "";
-      return `${Number(r.Estimate || 0).toFixed(2)} (t=${Number(r.T_Stat || 0).toFixed(1)})${stars}`;
+      return `${betas[idx].toFixed(2)} (t=${t.toFixed(1)})${stars}`;
     });
 
     const traces = [
