@@ -1,4 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "outputDirectory": "web"
+  "outputDirectory": "web",
+  "rewrites": [
+    { "source": "/api/live-market", "destination": "/api/index.py" }
+  ]
 }
