@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    name="description"
+    content="1-BLOOMBERG Professional Service: BCEOS Index DES <GO> Hypothetical Black CEO Equity Index (2000–2026)."
+  />
+  <title>1-BLOOMBERG | BCEOS Index DES &lt;GO&gt;</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="vendor/plotly.min.js" defer></script>
+  <script src="js/charts.js" defer></script>
+  <script src="js/dashboard.js" defer></script>
+</head>
+<body>
+  <!-- Top 2011 Bloomberg CRT Title Bar -->
+  <div class="bb-window-bar">
+    <div class="bb-window-bar__left">
+      <span class="bb-badge-1bb">1-BLOOMBERG</span>
+      <span>BLOOMBERG PROFESSIONAL SERVICE</span>
+      <span class="bb-sep">|</span>
+      <span id="bb-header-security" class="bb-amber">WEI / TOP &lt;GO&gt; LIVE MARKET MONITOR</span>
+    </div>
+    <div class="bb-window-bar__right">
+      <span id="bb-nyc-clock" class="bb-cyan">NYC 17:00:00 EST</span>
+      <span class="bb-sep">|</span>
+      <span>USER: QUANT_DESK_01</span>
+    </div>
+  </div>
+
+  <!-- Interactive Command Line & Function Bar -->
+  <header class="topbar" role="banner">
+    <div class="bb-cmd-strip">
+      <form id="bb-cmd-form" class="bb-cmd-form">
+        <span class="bb-green bb-bold">CMD:</span>
+        <input
+          type="text"
+          id="bb-cmd-input"
+          class="bb-cmd-input"
+          value="BCEOS Index DES <GO>"
+          aria-label="Bloomberg Command Line"
+        />
+        <button type="submit" class="bb-btn-amber">&lt;GO&gt;</button>
+      </form>
+
+      <nav class="bb-quick-keys" aria-label="Terminal Function Keys">
+        <button type="button" class="bb-fn-btn bb-fn-btn--active" data-screen="0">0) WEI MARKET</button>
+        <button type="button" class="bb-fn-btn" data-screen="1">1) BCEOS DES</button>
+        <button type="button" class="bb-fn-btn" data-screen="2">2) MEMB 40-CEOS</button>
+        <button type="button" class="bb-fn-btn" data-screen="3">3) GP WEALTH</button>
+        <button type="button" class="bb-fn-btn" data-screen="4">4) ECST MACRO</button>
+        <button type="button" class="bb-fn-btn" data-screen="5">5) VOL GARCH</button>
+        <button type="button" class="bb-fn-btn" data-screen="6">6) ALPH FF5</button>
+      </nav>
+    </div>
+
+    <div class="bb-sub-strip">
+      <div class="bb-sub-strip__left">
+        <span class="bb-amber bb-bold">BCEOS &lt;Index&gt;</span>
+        <span id="top-cagr-badge">12.99% CAGR (+515 bps vs SPX)</span>
+        <span class="bb-sep">|</span>
+        <span>LAST: <strong id="top-last-badge" class="bb-green">264.85 (26.48x)</strong></span>
+        <span class="bb-sep">|</span>
+        <span>AS OF: <strong id="top-asof-badge" class="bb-cyan">2026-11-23</strong></span>
+      </div>
+      <div class="bb-sub-strip__right">
+        <label class="bb-inline-label" for="strategy-select">
+          <span>SCHEME:</span>
+          <select id="strategy-select" class="bb-select">
+            <option value="Black_CEO_Net" selected>EQUAL-WEIGHT (NET, 10 BPS)</option>
+            <option value="Convex_Quality_Net">CONVEX-QUALITY QP (NET, 10 BPS)</option>
+          </select>
+        </label>
+        <button type="button" id="sim-ticks-btn" class="bb-btn-cyan">[SIMULATE TICKS: OFF]</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Viewport-Locked Center Stage (7 Screens: 0 to 6) -->
+  <main class="bb-stage" id="main-content">
+    <!-- ===================================================================== -->
+    <!-- SCREEN 0: WEI / TOP <GO> — LIVE MARKET MONITOR & TERMINAL LAUNCHPAD   -->
+    <!-- ===================================================================== -->
+    <section class="bb-screen bb-screen--active" id="screen-0" aria-label="Page 0 Market Monitor">
+      <div class="bb-grid-2col bb-grid-fill">
+        <!-- Left Column: WEI + FIT + Intraday Volatility Context -->
+        <div class="bb-col-stack">
+          <div class="bb-box">
+            <div class="bb-box__hdr">
+              <span>WORLD EQUITY INDICES (WEI &lt;GO&gt;)</span>
+              <span id="wei-feed-tag" class="bb-amber">CONNECTING...</span>
+            </div>
+            <table class="bb-table" id="wei-table">
+              <thead>
+                <tr>
+                  <th>INDEX</th>
+                  <th class="r">LAST</th>
+                  <th class="r">CHG</th>
+                  <th class="r">%CHG</th>
+                  <th class="r">YTD</th>
+                </tr>
+              </thead>
+              <tbody id="wei-tbody"></tbody>
+            </table>
+          </div>
+
+          <div class="bb-box">
+            <div class="bb-box__hdr">
+              <span>US TREASURIES &amp; RATES (FIT &lt;GO&gt;)</span>
+              <span class="bb-muted">BENCHMARK CURVE</span>
+            </div>
+            <table class="bb-table" id="fit-table">
+              <thead>
+                <tr>
+                  <th>TENOR</th>
+                  <th class="r">YIELD</th>
+                  <th class="r">CHG (BPS)</th>
+                  <th class="r">SPD VS 3M</th>
+                </tr>
+              </thead>
+              <tbody id="fit-tbody"></tbody>
+            </table>
+          </div>
+
+          <div class="bb-box bb-box--grow">
+            <div class="bb-box__hdr">
+              <span>INTRADAY SPX VS. VIX VOLATILITY CONTEXT</span>
+              <span id="vix-context-badge" class="bb-cyan">VIX: 35.89</span>
+            </div>
+            <div class="bb-intraday-wrap">
+              <div id="wei-intraday-svg" class="bb-intraday-chart"></div>
+              <p id="wei-vol-commentary" class="bb-vol-note">
+                Live VIX (35.89) vs. BCEOS unconditional GARCH(1,1) vol (38.32%) and causal 20% vol-targeted overlay (19.93%).
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Live TOP <GO> News Wire (Pinned BI Quant + Live Investopedia/Market Feed) -->
+        <div class="bb-col-stack">
+          <div class="bb-box bb-box--grow">
+            <div class="bb-box__hdr">
+              <span>TOP FINANCIAL &amp; GOVERNANCE HEADLINES (TOP &lt;GO&gt;)</span>
+              <span id="news-wire-status" class="bb-cyan">INVESTOPEDIA + LIVE WIRE</span>
+            </div>
+            <div class="bb-news-list" id="live-news-list">
+              <!-- Pinned BI Quant Headline + Rotating Live Headlines rendered by dashboard.js -->
+            </div>
+          </div>
+
+          <div class="bb-box bb-launch-box">
+            <div class="bb-box__hdr">
+              <span>CUSTOM INDEX RESEARCH DESK (QUICK LAUNCH)</span>
+              <span class="bb-green">READY</span>
+            </div>
+            <div class="bb-kv-list">
+              <div class="bb-kv"><span>Custom Ticker :</span><strong class="bb-cyan">BCEOS &lt;Index&gt; (Point-in-Time)</strong></div>
+              <div class="bb-kv"><span>Coverage      :</span><strong>40 CEOs / 36 Public Issuers (Incl. Delisted)</strong></div>
+              <div class="bb-kv"><span>Horizon       :</span><strong id="launch-horizon-val">2000-01-03 to 2026-11-23 (6,764 Sessions)</strong></div>
+              <div class="bb-kv"><span>Execution     :</span><strong>Strict t+1 Lag &bull; 10 bps Friction</strong></div>
+            </div>
+            <button type="button" id="launch-des-btn" class="bb-launch-btn">
+              &gt;&gt;&gt; LAUNCH: BCEOS Index DES &lt;GO&gt; <span class="bb-cursor-block">&#9608;</span> &lt;&lt;&lt;
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- SCREEN 1: BCEOS INDEX DES <GO> — 4-QUADRANT SECURITY TEARSHEET        -->
+    <!-- ===================================================================== -->
+    <section class="bb-screen" id="screen-1" aria-label="Page 1 Security Description Tearsheet">
+      <div class="bb-tearsheet-banner">
+        <span>SECURITY DESCRIPTION: BLACK CEO HYPOTHETICAL EQUITY INDEX (POINT-IN-TIME)</span>
+        <span id="des-page-tag">BCEOS &lt;Index&gt; DES &lt;GO&gt; &bull; PAGE 1 OF 6</span>
+      </div>
+
+      <div class="bb-quadrant-grid bb-grid-fill">
+        <!-- Quadrant 1: Index Profile, Governance Methodology & BI Quant Research Summary -->
+        <article class="bb-box bb-cascade">
+          <div class="bb-box__hdr">
+            <span>1) INDEX PROFILE, GOVERNANCE &amp; BI RESEARCH SUMMARY</span>
+            <span class="bb-cyan">PORT &lt;GO&gt;</span>
+          </div>
+          <div class="bb-kv-list bb-kv-list--compact">
+            <div class="bb-kv"><span>Index Name       :</span><strong>Black CEO Leadership Index (Net)</strong></div>
+            <div class="bb-kv"><span>Ticker / Mnemonic:</span><strong class="bb-cyan">BCEOS &lt;Index&gt;</strong></div>
+            <div class="bb-kv"><span>Inception / End  :</span><strong id="des-horizon-val">01/03/2000 - 11/23/2026 (6,764d)</strong></div>
+            <div class="bb-kv"><span>Universe Scope   :</span><strong>40 CEO Tenures / 36 Public Issuers</strong></div>
+            <div class="bb-kv"><span>Weighting Scheme :</span><strong>Equal-Weight (Alt: Convex-QP)</strong></div>
+            <div class="bb-kv"><span>Rebalance &amp; Lag  :</span><strong>Event-Driven + Strict t+1 Lag</strong></div>
+            <div class="bb-kv"><span>Friction &amp; Turn. :</span><strong>10 bps One-Way (2.07% Drag) &bull; 76.99% Turn</strong></div>
+          </div>
+          <div class="bb-analyst-callout">
+            <div class="bb-amber bb-bold">BI QUANT RESEARCH SUMMARY:</div>
+            <div id="des-research-summary">
+              Point-in-time backtest across 36 public issuers (including delisted AET, GBT, JCP, QRTEA, PBPB, WBA) eliminates survivorship bias. BCEOS compounds $10k to $264.8k (12.99% net CAGR vs. 7.84% SPX) with +10.27% FF5 alpha, driven by positive upside skew (Sortino 0.84 vs. Sharpe 0.45).
+            </div>
+          </div>
+        </article>
+
+        <!-- Quadrant 3: Institutional Performance Scorecard -->
+        <div class="bb-box bb-cascade">
+          <div class="bb-box__hdr">
+            <span>3) INSTITUTIONAL PERFORMANCE SCORECARD</span>
+            <span class="bb-muted">BENCHMARK RELATIVE</span>
+          </div>
+          <table class="bb-table bb-table--striped" id="scorecard-table">
+            <thead>
+              <tr>
+                <th>METRIC</th>
+                <th class="r bb-amber">BCEOS</th>
+                <th class="r">SPX</th>
+                <th class="r">RSP*</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>CAGR (Net)</td><td id="sc-bceos-cagr" class="r bb-green bb-bold">12.99%</td><td class="r">7.84%</td><td class="r">11.01%</td></tr>
+              <tr><td>Ann. Volatility</td><td id="sc-bceos-vol" class="r">38.32%</td><td class="r">19.25%</td><td class="r">19.69%</td></tr>
+              <tr><td>Sharpe (Rf=1.5%)</td><td id="sc-bceos-sharpe" class="r bb-bold">0.45</td><td class="r">0.41</td><td class="r">0.55</td></tr>
+              <tr><td>Sortino Ratio</td><td id="sc-bceos-sortino" class="r bb-green bb-bold">0.84</td><td class="r bb-muted" title="Full-horizon Sortino computed on 2000–2026 series">—</td><td class="r bb-muted" title="RSP inception May 2003">—</td></tr>
+              <tr><td>Max Drawdown</td><td id="sc-bceos-mdd" class="r bb-red">-70.44%</td><td class="r">-55.19%</td><td class="r">-59.92%</td></tr>
+              <tr><td>Beta vs Bench</td><td class="r bb-muted" title="BCEOS is the target portfolio">1.00 (Self)</td><td class="r">0.86</td><td class="r">0.90</td></tr>
+              <tr><td>Jensen Alpha (FF5)</td><td class="r bb-cyan bb-bold">+10.27%</td><td class="r">0.00%</td><td class="r">+8.19%</td></tr>
+              <tr><td>Tracking Error</td><td class="r bb-muted" title="Active risk measured vs SPX/RSP">0.00%</td><td class="r">34.63%</td><td class="r">35.66%</td></tr>
+              <tr><td>Wealth Multiple</td><td id="sc-bceos-mult" class="r bb-amber bb-bold">26.48x</td><td class="r">7.61x</td><td class="r">12.02x</td></tr>
+              <tr><td>GARCH(1,1) a+b</td><td class="r">0.9982</td><td class="r">0.9805</td><td class="r bb-muted" title="RSP inception May 2003">—</td></tr>
+              <tr><td>Post-2010 GARCH HL</td><td class="r bb-green">7.0d</td><td class="r">35.2d</td><td class="r bb-muted" title="RSP inception May 2003">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Quadrant 2: Live Auto-Drawing Mini-Chart with Axis Labels & Speed Control -->
+        <div class="bb-box bb-cascade">
+          <div class="bb-box__hdr">
+            <span>2) LIVE MINI-CHART: GROWTH OF $10K (USD)</span>
+            <div class="bb-mini-transport">
+              <select id="des-mini-speed" class="bb-select" aria-label="Mini Chart Speed">
+                <option value="0.25">0.25x</option>
+                <option value="0.5">0.5x</option>
+                <option value="1">1x</option>
+                <option value="5" selected>5x</option>
+                <option value="15">15x</option>
+              </select>
+              <button type="button" id="des-mini-start" class="bb-mini-btn" title="Start (2000-01-03)">|&lt;</button>
+              <button type="button" id="des-mini-play" class="bb-mini-btn" title="Play / Pause">&gt;</button>
+              <button type="button" id="des-mini-end" class="bb-mini-btn" title="Latest Close">&gt;|</button>
+            </div>
+          </div>
+          <div id="des-mini-chart" class="bb-des-mini-stage"></div>
+          <div class="bb-des-mini-legend">
+            <span><strong class="bb-green">&#9632; BCEOS: <span id="des-mini-bceos-val">$264.8k</span></strong> (Y-Axis: Portfolio Value)</span>
+            <span><strong class="bb-cyan">&#9632; SPX: <span id="des-mini-spx-val">$76.1k</span></strong></span>
+            <span>X-Axis: <strong id="des-mini-cursor-date" class="bb-amber">2026-11-23</strong></span>
+          </div>
+        </div>
+
+        <!-- Quadrant 4: Terminal Function Directory (Press #) -->
+        <div class="bb-box bb-cascade">
+          <div class="bb-box__hdr">
+            <span>4) TERMINAL FUNCTION DIRECTORY (PRESS #)</span>
+            <span class="bb-cyan">CLICK OR TYPE &lt;GO&gt;</span>
+          </div>
+          <div class="bb-fn-dir">
+            <button type="button" class="bb-dir-row" data-screen="2">
+              <span class="bb-dir-code">2 &lt;GO&gt;</span>
+              <div>
+                <div class="bb-dir-title">MEMB: 40-CEO CONSTITUENT ROSTER, SECTORS &amp; BIOS</div>
+                <div class="bb-dir-sub">Click any CEO for profile, compensation metrics &amp; SEC data sources</div>
+              </div>
+            </button>
+            <button type="button" class="bb-dir-row" data-screen="3">
+              <span class="bb-dir-code">3 &lt;GO&gt;</span>
+              <div>
+                <div class="bb-dir-title">GP: INTERACTIVE WEALTH, DRAWDOWN &amp; 3Y ALPHA LAB</div>
+                <div class="bb-dir-sub">Synchronized replay cursor, Gross-vs-Net 10 bps &amp; chapter narrator</div>
+              </div>
+            </button>
+            <button type="button" class="bb-dir-row" data-screen="4">
+              <span class="bb-dir-code">4 &lt;GO&gt;</span>
+              <div>
+                <div class="bb-dir-title">ECST: MACRO REGIME ATTRIBUTION (6 ERAS + 10Y YIELD)</div>
+                <div class="bb-dir-sub">Honest upside/downside regime briefing &amp; rate-cycle overlay</div>
+              </div>
+            </button>
+            <button type="button" class="bb-dir-row" data-screen="5">
+              <span class="bb-dir-code">5 &lt;GO&gt;</span>
+              <div>
+                <div class="bb-dir-title">VOL: 3D GJR-GARCH SURFACE &amp; 20% VOL-TARGET LAB</div>
+                <div class="bb-dir-sub">Auto-spinning 3D mesh, +3&sigma;/-3&sigma; shock decay &amp; dynamic weight w_t</div>
+              </div>
+            </button>
+            <button type="button" class="bb-dir-row" data-screen="6">
+              <span class="bb-dir-code">6 &lt;GO&gt;</span>
+              <div>
+                <div class="bb-dir-title">ALPH: FF5 FACTORS, 10K BOOTSTRAP &amp; MARTINGALE AUDIT</div>
+                <div class="bb-dir-sub">Live 10k bootstrap resampling, Ljung-Box lags &amp; IC audit export</div>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- SCREEN 2: MEMB <GO> — 40-CEO CONSTITUENT ROSTER, SECTORS & PROFILES   -->
+    <!-- ===================================================================== -->
+    <section class="bb-screen" id="screen-2" aria-label="Page 2 Index Constituents">
+      <div class="bb-tearsheet-banner">
+        <span>BCEOS &lt;Index&gt; MEMB &lt;GO&gt; — CONSTITUENTS, SECTOR BREAKDOWN &amp; CEO DOSSIERS</span>
+        <span class="bb-cyan">CLICK ANY CEO ROW FOR PROFILE, COMP &amp; SOURCES &bull; PAGE 2 OF 6</span>
+      </div>
+      <div class="bb-grid-2col bb-box--sm-row">
+        <div class="bb-box">
+          <div class="bb-box__hdr">
+            <span>ACTIVE BLACK CEO UNIVERSE BREADTH (N<sub>t</sub>: 0 TO 17 ISSUERS)</span>
+            <span class="bb-muted">POINT-IN-TIME T+1 MASK</span>
+          </div>
+          <div id="chart-constituent-count" class="bb-chart-sm"></div>
+        </div>
+        <div class="bb-box">
+          <div class="bb-box__hdr">
+            <span>SECTOR CONCENTRATION (40 CEO TENURES: TOTAL VS. ACTIVE)</span>
+            <span class="bb-amber">GICS SECTOR BAR CHART</span>
+          </div>
+          <div id="chart-sector-bars" class="bb-chart-sm"></div>
+        </div>
+      </div>
+      <div class="bb-narrator-bar" id="commentary-memb">
+        <strong class="bb-amber">PLAIN ENGLISH:</strong> Loading active universe commentary...
+      </div>
+      <div class="bb-box bb-box--grow bb-box--scroll">
+        <div class="bb-box__hdr">
+          <span>40 CEO TENURES / 36 UNIQUE ISSUERS (CLICK ANY ROW FOR PROFILE &amp; SOURCES)</span>
+          <div class="bb-filter-group">
+            <input type="search" id="roster-search" class="bb-filter-input" placeholder="Search ticker, CEO, sector..." />
+            <select id="roster-status-filter" class="bb-select">
+              <option value="ALL" selected>ALL (40)</option>
+              <option value="ACTIVE">ACTIVE (17)</option>
+              <option value="EXITED / HISTORICAL">EXITED (17)</option>
+              <option value="DELISTED">DELISTED/M&amp;A (6)</option>
+            </select>
+          </div>
+        </div>
+        <table class="bb-table bb-table--striped" id="roster-table">
+          <thead>
+            <tr>
+              <th>CEO &amp; ISSUER (CLICK FOR DOSSIER)</th>
+              <th>SECTOR</th>
+              <th>TENURE WINDOW</th>
+              <th>STATUS</th>
+              <th class="r">CURR WT</th>
+              <th class="r">START $</th>
+              <th class="r">PEAK STOCK $</th>
+              <th class="r">TENURE RET</th>
+              <th>PATH</th>
+            </tr>
+          </thead>
+          <tbody id="roster-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- SCREEN 3: GP <GO> — WEALTH, DRAWDOWN & 3Y EXCESS ALPHA LAB            -->
+    <!-- ===================================================================== -->
+    <section class="bb-screen" id="screen-3" aria-label="Page 3 Wealth and Drawdown">
+      <div class="bb-tearsheet-banner">
+        <span>BCEOS &lt;Index&gt; GP &lt;GO&gt; — GROWTH OF $10,000, DRAWDOWN &amp; 3Y ALPHA LAB</span>
+        <div class="bb-mini-transport">
+          <button type="button" id="gp-start-btn" class="bb-mini-btn">|&lt; START</button>
+          <button type="button" id="gp-play-btn" class="bb-mini-btn">&gt; PLAY</button>
+          <button type="button" id="gp-end-btn" class="bb-mini-btn">&gt;| END</button>
+          <select id="gp-speed-select" class="bb-select" aria-label="GP Playback Speed">
+            <option value="0.25">0.25x</option>
+            <option value="0.5">0.5x</option>
+            <option value="1">1x</option>
+            <option value="5" selected>5x</option>
+            <option value="15">15x</option>
+          </select>
+          <button type="button" id="gp-gross-toggle" class="bb-mini-btn bb-mini-btn--active">GROSS-VS-NET: ON</button>
+          <button type="button" class="bb-mini-btn bb-mini-btn--active" data-scale="log">LOG</button>
+          <button type="button" class="bb-mini-btn" data-scale="linear">LINEAR</button>
+        </div>
+      </div>
+
+      <div class="bb-telemetry-strip" id="gp-cursor-telemetry">
+        CURSOR: <strong class="bb-amber">2026-11-23 (6,764 / 6,764)</strong> |
+        BCEOS NET: <strong class="bb-green">$264,850</strong> |
+        GROSS: <strong class="bb-cyan">$270,450 (2.07% Drag)</strong> |
+        SPX: <strong>$76,120</strong> |
+        ACTIVE N: <strong class="bb-amber">17</strong>
+      </div>
+
+      <div class="bb-grid-2col bb-grid-fill">
+        <div class="bb-box bb-box--grow">
+          <div class="bb-box__hdr"><span>1) CUMULATIVE WEALTH CURVE ($10K BASE)</span><span class="bb-green">26.48x NET</span></div>
+          <div id="chart-equity-curve" class="bb-chart-med"></div>
+        </div>
+        <div class="bb-box bb-box--grow">
+          <div class="bb-box__hdr"><span>2) UNDERWATER DRAWDOWN PROFILE (%)</span><span class="bb-red">-70.44% MDD</span></div>
+          <div id="chart-drawdown" class="bb-chart-med"></div>
+        </div>
+      </div>
+
+      <div class="bb-box bb-box--strip">
+        <div class="bb-box__hdr">
+          <span>3) ROLLING 3-YEAR EXCESS ALPHA VS. SPX &amp; GROSS-VS-NET FRICTION STRIP (10 BPS)</span>
+          <span class="bb-cyan">SYNCHRONIZED CRT CURSOR</span>
+        </div>
+        <div id="chart-rolling-alpha" class="bb-chart-xs"></div>
+      </div>
+
+      <div class="bb-narrator-bar" id="commentary-gp">
+        <strong class="bb-amber">PLAIN ENGLISH:</strong> Loading wealth &amp; drawdown commentary...
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- SCREEN 4: ECST <GO> — MACROECONOMIC REGIME ATTRIBUTION                -->
+    <!-- ===================================================================== -->
+    <section class="bb-screen" id="screen-4" aria-label="Page 4 Macro Regime Attribution">
+      <div class="bb-tearsheet-banner">
+        <span>BCEOS &lt;Index&gt; ECST &lt;GO&gt; — MACROECONOMIC &amp; RATE-CYCLE REGIME ATTRIBUTION</span>
+        <div class="bb-mini-transport">
+          <button type="button" id="ecst-yield-toggle" class="bb-mini-btn bb-mini-btn--active">10Y YIELD OVERLAY: ON</button>
+          <select id="regime-select" class="bb-select" aria-label="Macro Regime Filter">
+            <option value="ALL" selected>ALL 6 MACRO REGIMES (2000–2026)</option>
+            <option value="dot_com_bust">1) DOT-COM BUST (2000–2002)</option>
+            <option value="gfc_2008">2) GLOBAL FINANCIAL CRISIS (2007–2009)</option>
+            <option value="zirp_qe_era">3) ZIRP &amp; QE EXPANSION (2009–2020)</option>
+            <option value="covid_shock_stimulus">4) COVID-19 SHOCK &amp; STIMULUS (2020–2021)</option>
+            <option value="inflation_rate_hikes">5) 2022–2023 RATE-HIKE CYCLE</option>
+            <option value="ai_high_rate_regime">6) AI &amp; HIGH-RATE ERA (2023–2026)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="bb-grid-2col bb-grid-fill">
+        <div class="bb-box bb-box--grow bb-box--scroll">
+          <div class="bb-box__hdr">
+            <span>REGIME PERFORMANCE MATRIX (CLICK ANY ROW BELOW)</span>
+            <span class="bb-amber">WINDOWED RETURN &amp; CAPTURE</span>
+          </div>
+          <table class="bb-table bb-table--striped" id="macro-regime-table">
+            <thead>
+              <tr>
+                <th>MACRO REGIME</th>
+                <th class="r">Nt</th>
+                <th class="r">BCEOS</th>
+                <th class="r">SPX</th>
+                <th class="r">MAX DD</th>
+                <th class="r">DOWN CAP</th>
+              </tr>
+            </thead>
+            <tbody id="macro-regime-tbody"></tbody>
+          </table>
+          <div class="bb-analyst-callout" id="ecst-inline-detail" style="margin-top:8px;">
+            <div class="bb-amber bb-bold">SELECTED REGIME BRIEFING (CLICK ANY ROW ABOVE):</div>
+            <div>Click any macro era row above to inspect exact window dates, active Black CEO breadth (Nt), drawdown recovery speed, and downside capture vs. S&amp;P 500.</div>
+          </div>
+        </div>
+
+        <div class="bb-col-stack">
+          <div class="bb-box bb-box--grow">
+            <div class="bb-box__hdr">
+              <span>REGIME RETURN VS. SPX &amp; US 10Y YIELD / FED FUNDS OVERLAY</span>
+              <span class="bb-cyan">RATE CYCLE CONTEXT</span>
+            </div>
+            <div id="chart-ecst-rates" class="bb-chart-sm"></div>
+          </div>
+
+          <div class="bb-box">
+            <div class="bb-box__hdr">
+              <span>HONEST RISK ATTRIBUTION BRIEFING (WHERE IT SHINES VS. HURTS)</span>
+              <span class="bb-green">INSTITUTIONAL TRANSPARENCY</span>
+            </div>
+            <div class="bb-kv-list bb-kv-list--compact">
+              <div class="bb-kv"><span><strong class="bb-green">WHERE IT SHINES:</strong></span><strong>+50.8% vs SPX in Dot-Com Bust (0.62x DownCap) &amp; +36.2% in AI/High-Rate Era (0.79x DownCap).</strong></div>
+              <div class="bb-kv"><span><strong class="bb-red">WHERE IT HURTS:</strong></span><strong>Higher beta sensitivity in 2008 GFC (-67.8% vs -54.8% SPX) &amp; 2022 Rate Hikes (1.22x DownCap).</strong></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bb-narrator-bar" id="commentary-ecst">
+        <strong class="bb-amber">PLAIN ENGLISH:</strong> Loading macro regime commentary...
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- SCREEN 5: VOL <GO> — 3D GJR-GARCH SURFACE & 20% VOL-TARGET LAB        -->
+    <!-- ===================================================================== -->
+    <section class="bb-screen" id="screen-5" aria-label="Page 5 GARCH Volatility Lab">
+      <div class="bb-tearsheet-banner">
+        <span>BCEOS &lt;Index&gt; VOL &lt;GO&gt; — 3D GJR-GARCH SURFACE &amp; 20% VOL-TARGET OVERLAY LAB</span>
+        <div class="bb-mini-transport">
+          <button type="button" id="vol-spin-btn" class="bb-mini-btn bb-mini-btn--active">3D AUTO-SPIN: ON</button>
+          <span class="bb-cyan">QLIKE LOSS: 1.6707 &bull; REALIZED TARGET VOL: 19.93% &bull; MDD CUT: -1,933 BPS</span>
+        </div>
+      </div>
+
+      <div class="bb-quadrant-grid bb-grid-fill">
+        <!-- Q1: Auto-Spinning 3D GJR-GARCH Surface -->
+        <div class="bb-box">
+          <div class="bb-box__hdr">
+            <span>1) 3D GJR-GARCH IMPULSE SURFACE (BCEOS BOWL VS. SPY V-SKEW)</span>
+            <button type="button" id="vol-points-btn" class="bb-mini-btn">[SHOW POINTS: OFF]</button>
+          </div>
+          <div id="chart-garch-3d" class="bb-chart-quad"></div>
+        </div>
+
+        <!-- Q2: Walk-Forward 20% Vol-Target Overlay Replay + Dynamic Exposure Gauge -->
+        <div class="bb-box">
+          <div class="bb-box__hdr">
+            <span>2) 20% VOL-TARGET OVERLAY REPLAY &amp; EXPOSURE w<sub>t</sub></span>
+            <div class="bb-mini-transport">
+              <button type="button" id="vol-start-btn" class="bb-mini-btn">|&lt;</button>
+              <button type="button" id="vol-play-btn" class="bb-mini-btn">&gt;</button>
+              <button type="button" id="vol-end-btn" class="bb-mini-btn">&gt;|</button>
+              <select id="vol-speed-select" class="bb-select" aria-label="Vol Replay Speed">
+                <option value="0.25">0.25x</option>
+                <option value="0.5">0.5x</option>
+                <option value="1">1x</option>
+                <option value="5" selected>5x</option>
+                <option value="15">15x</option>
+              </select>
+            </div>
+          </div>
+          <div id="chart-vol-overlay" class="bb-chart-quad"></div>
+          <div class="bb-exposure-bar">
+            <span>EXPOSURE WEIGHT w<sub>t</sub>: <strong id="vol-wt-readout" class="bb-green">100.0%</strong></span>
+            <div class="bb-gauge-track"><div id="vol-wt-fill" class="bb-gauge-fill" style="width: 100%"></div></div>
+            <span id="vol-date-readout" class="bb-amber">2026-11-23</span>
+          </div>
+        </div>
+
+        <!-- Q3: Interactive +3σ / -3σ Shock Simulator -->
+        <div class="bb-box">
+          <div class="bb-box__hdr">
+            <span>3) SHOCK HALF-LIFE DECAY (PRE-2010: 146.8D VS. POST-2010: 7.0D)</span>
+            <div class="bb-mini-transport">
+              <button type="button" id="shock-pos-btn" class="bb-mini-btn bb-mini-btn--active">[+3&sigma; SHOCK]</button>
+              <button type="button" id="shock-neg-btn" class="bb-mini-btn">[-3&sigma; SHOCK]</button>
+            </div>
+          </div>
+          <div id="chart-shock-decay" class="bb-chart-quad"></div>
+        </div>
+
+        <!-- Q4: GARCH & Vol-Target Scorecard -->
+        <div class="bb-box">
+          <div class="bb-box__hdr">
+            <span>4) GARCH &amp; CAUSAL VOL-TARGET SCORECARD</span>
+            <span class="bb-green">WALK-FORWARD</span>
+          </div>
+          <table class="bb-table bb-table--striped">
+            <thead>
+              <tr><th>PORTFOLIO VARIANT</th><th class="r">ANN. VOL</th><th class="r">MAX DD</th><th class="r">SHARPE</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Unscaled Equal-Weight (Net)</td><td class="r">38.32%</td><td class="r bb-red">-70.44%</td><td class="r">0.45</td></tr>
+              <tr><td>Convex-Quality QP (Net)</td><td class="r bb-green">24.81%</td><td class="r bb-amber">-59.82%</td><td class="r">0.44</td></tr>
+              <tr><td>Causal 20% GARCH Vol-Target</td><td class="r bb-green bb-bold">19.93%</td><td class="r bb-green bb-bold">-51.11%</td><td class="r bb-green bb-bold">0.48</td></tr>
+              <tr><td>S&amp;P 500 Benchmark (SPX)</td><td class="r">19.25%</td><td class="r">-55.19%</td><td class="r">0.41</td></tr>
+              <tr><td>GJR-GARCH Asymmetry (&gamma;)</td><td class="r bb-cyan">0.0594</td><td class="r bb-muted">vs SPY 0.1929</td><td class="r bb-green">Symmetric</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="bb-narrator-bar" id="commentary-vol">
+        <strong class="bb-amber">PLAIN ENGLISH:</strong> Loading volatility &amp; risk overlay commentary...
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- SCREEN 6: ALPH <GO> — FF5 FACTORS, BOOTSTRAP & MARTINGALE AUDIT       -->
+    <!-- ===================================================================== -->
+    <section class="bb-screen" id="screen-6" aria-label="Page 6 Factor Attribution">
+      <div class="bb-tearsheet-banner">
+        <span>BCEOS &lt;Index&gt; ALPH &lt;GO&gt; — FACTOR ATTRIBUTION, 10K BOOTSTRAP &amp; MARTINGALE AUDIT</span>
+        <div class="bb-mini-transport">
+          <button type="button" id="resample-mc-btn" class="bb-mini-btn bb-mini-btn--active">[RESAMPLE 10,000 PATHS]</button>
+          <button type="button" id="export-audit-btn" class="bb-mini-btn">[99) EXPORT IC AUDIT JSON]</button>
+        </div>
+      </div>
+
+      <div class="bb-quadrant-grid bb-grid-fill">
+        <!-- Q1: Staggered FF5 Factor Loadings -->
+        <div class="bb-box">
+          <div class="bb-box__hdr"><span>1) FAMA-FRENCH 5-FACTOR LOADINGS (NEWEY-WEST HAC)</span><span class="bb-green">+10.52% ALPHA ***</span></div>
+          <div id="chart-ff5-factors" class="bb-chart-quad"></div>
+        </div>
+
+        <!-- Q2: Interactive 10,000-Trial Monte Carlo Bootstrap -->
+        <div class="bb-box">
+          <div class="bb-box__hdr"><span>2) 10,000-TRIAL MONTE CARLO PERMUTATION BOOTSTRAP</span><span class="bb-amber">97.6TH PCTL</span></div>
+          <div id="chart-mc-bootstrap" class="bb-chart-quad"></div>
+        </div>
+
+        <!-- Q3: Ljung-Box Serial Correlation Correlogram -->
+        <div class="bb-box">
+          <div class="bb-box__hdr"><span>3) LJUNG-BOX SERIAL CORRELATION CORRELOGRAM</span><span class="bb-cyan">LAG 1 p = 0.1164</span></div>
+          <div id="chart-ljung-box" class="bb-chart-quad"></div>
+        </div>
+
+        <!-- Q4: Walk-Forward ARIMA / ARIMAX Martingale Efficiency Table -->
+        <div class="bb-box">
+          <div class="bb-box__hdr"><span>4) WALK-FORWARD ARIMA / ARIMAX MARTINGALE AUDIT</span><span class="bb-green">NO STALE PRICING</span></div>
+          <table class="bb-table bb-table--striped">
+            <thead>
+              <tr><th>FORECAST MODEL</th><th class="r">OOS RMSE</th><th class="r">OOS R&sup2;</th><th class="r">DIR. ACC</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Expanding Historical Mean</td><td class="r">0.02659</td><td class="r">0.0000%</td><td class="r">50.00%</td></tr>
+              <tr><td>ARIMA(1,0,1) Return Forecast</td><td class="r">0.02660</td><td class="r bb-cyan">-0.0550%</td><td class="r">51.21%</td></tr>
+              <tr><td>ARIMAX(1,0,1) + Market Exog</td><td class="r">0.02662</td><td class="r bb-cyan">-0.2598%</td><td class="r">51.68%</td></tr>
+              <tr><td>Ljung-Box Lag 1 (1-Day Drift)</td><td class="r bb-green">Q = 2.46</td><td class="r bb-green">p = 0.1164</td><td class="r bb-green">White Noise</td></tr>
+              <tr><td>Ljung-Box Lags 5–21 (Vol Cluster)</td><td class="r bb-amber">Q &gt; 410</td><td class="r bb-amber">p &lt; 1e-20</td><td class="r bb-amber">GARCH Valid</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="bb-narrator-bar" id="commentary-alph">
+        <strong class="bb-amber">PLAIN ENGLISH:</strong> Loading factor attribution &amp; bootstrap commentary...
+      </div>
+    </section>
+  </main>
+
+  <!-- CEO Dossier Modal (Page 2 Click-to-Inspect Profile, Comp & Research Sources) -->
+  <div id="ceo-modal" class="bb-modal" hidden>
+    <div class="bb-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="ceo-modal-title">
+      <div class="bb-box__hdr">
+        <span id="ceo-modal-title">EXECUTIVE DOSSIER &amp; GOVERNANCE SOURCES</span>
+        <button type="button" id="ceo-modal-close" class="bb-btn-amber">[ESC / CLOSE]</button>
+      </div>
+      <div id="ceo-modal-body" class="bb-modal__body"></div>
+    </div>
+  </div>
+
+  <!-- Classic Bottom Terminal Status Bar -->
+  <footer class="footer" role="contentinfo">
+    <div class="footer__inner">
+      <span><strong class="bb-green">STATUS: TERMINAL READY</strong> | CONNECTION: NYC-QUANT-01 | <span id="footer-feed-status" class="bb-amber">FEED: INITIALIZING</span></span>
+      <span>PRESS &lt;0&gt;-&lt;6&gt; OR CLICK ANY CYAN FUNCTION CODE</span>
+    </div>
+  </footer>
+</body>
+</html>

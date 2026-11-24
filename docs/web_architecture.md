@@ -1,51 +1,16 @@
-# Interactive Web Dashboard & Visualization Architecture (Milestone 5)
+# 1-BLOOMBERG Quantitative Workstation Architecture
 
-## 1. Overview & Design Principles
+## 1. 6-Screen Viewport-Locked Layout (`100vh x 100vw`)
+- **Outer Frame:** Persistent top command bar (`1<GO>`–`6<GO>`), left navigation rail (`Analysis`, `Data Library`, `Monitor`), right monitor rail (`Key Indicators` + `Active Constituents`), and bottom live telemetry status bar.
+- **Screens:**
+  - `01 Overview`: BI Playbook executive summary, animated KPI strip, and clickable empirical findings feed.
+  - `02 Equity & Drawdown`: Interactive log/linear cumulative wealth curve (`$10,000` initial) and underwater drawdown profile.
+  - `03 Universe Breadth`: Point-in-time active Black CEO constituent count ($N_t$, `0` to `17` issuers).
+  - `04 Macro Regimes`: 6-regime event attribution table and full-horizon institutional scorecard.
+  - `05 FF5 & Bootstrap`: Fama-French 5-Factor Newey-West HAC loadings and 10,000-trial Monte Carlo bootstrap comparison.
+  - `06 40-CEO Roster`: Searchable and status-filterable dossier across all 40 CEO tenures / 36 unique issuers with tenure Peak Stock Prices and SVG sparklines.
 
-The **Black CEO Portfolio Backtest** visualization pipeline decouples quantitative compute (`src/backtest.py`, `src/attribution.py`, `src/bootstrap.py`) from interactive presentation (`src/charts.py`, `notebook/01_interactive_visualizations.ipynb`, and `web/`). Rather than executing live optimizations or 10,000-trial bootstraps on page load, the pipeline pre-computes deterministic Plotly JSON figure specifications stored in `data/charts/`.
-
-## 2. Artifact & Data Flow
-
-```text
-data/backtest_results.csv ──┐
-data/summary_metrics.json ──┼──► src/charts.py ──► data/charts/*.json ──► Web Dashboard (Plotly.js)
-data/factor_loadings.csv ───┤         │
-data/mc_results.json ───────┘         └──► notebook/01_interactive_visualizations.ipynb
-./venv/bin/python - << 'EOF'
-from pathlib import Path
-
-Path("docs").mkdir(parents=True, exist_ok=True)
-doc_text = """# Interactive Web Dashboard & Visualization Architecture (Milestone 5)
-
-## 1. Overview & Design Principles
-
-The **Black CEO Portfolio Backtest** visualization pipeline decouples quantitative compute (`src/backtest.py`, `src/attribution.py`, `src/bootstrap.py`) from interactive presentation (`src/charts.py`, `notebook/01_interactive_visualizations.ipynb`, and `web/`). Rather than executing live optimizations or 10,000-trial bootstraps on page load, the pipeline pre-computes deterministic Plotly JSON figure specifications stored in `data/charts/`.
-
-## 2. Artifact & Data Flow
-
-    data/backtest_results.csv ──┐
-    data/summary_metrics.json ──┼──► src/charts.py ──► data/charts/*.json ──► Web Dashboard (Plotly.js)
-    data/factor_loadings.csv ───┤         │
-    data/mc_results.json ───────┘         └──► notebook/01_interactive_visualizations.ipynb
-
-### Exported Chart Artifacts (`data/charts/`)
-
-| Artifact Path | Builder Function (`src/charts.py`) | Sub-Issue | Interactive Controls |
-| :--- | :--- | :--- | :--- |
-| `data/charts/cumulative_equity_curve.json` | `build_cumulative_equity_curve_figure()` | `#243` | Linear / Log y-axis toggle, `1Y / 5Y / 10Y / MAX` range selector, unified hover |
-| `data/charts/underwater_drawdown.json` | `build_underwater_drawdown_figure()` | `#244` | Peak-to-trough percentage area fills, `1Y / 5Y / 10Y / MAX` range selector |
-| `data/charts/active_constituent_count.json` | `build_active_constituent_count_figure()` | `#245` | Stepped $N_t$ area curve, $N_t = 3$ full-deployment threshold line |
-
-## 3. Programmatic & Notebook Execution
-
-* **CLI Regenerator:** `./venv/bin/python -m src.charts`
-* **Interactive Exploration Notebook:** Open `notebook/01_interactive_visualizations.ipynb` using the `./venv/bin/python` kernel to inspect and render each figure interactively via `fig.show()`.
-
-## 4. Schema & Serialization Contract
-
-Every figure returned by `src/charts.py` is serialized via `export_figure_json(fig, output_path)` using Plotly's `fig.to_json(validate=True)` encoder (`plotly >= 7.1.0`) and validated by `validate_plotly_json_schema()`, guaranteeing strict RFC 8259 UTF-8 JSON (`allow_nan=False`), finite numeric arrays (`data`), and layout configuration (`layout`) consumable directly by frontend `Plotly.newPlot()` calls.
-"""
-Path("docs/web_architecture.md").write_text(doc_text, encoding="utf-8")
-print("Wrote docs/web_architecture.md")
-
----
+## 2. Keyboard & UI Interaction Controls
+- **Function Commands:** Type `1<GO>` through `6<GO>` in the top orange command bar (or press keys `1`–`6` outside input fields) to switch screens.
+- **Sidebar Toggle:** Click `94<Go> to Hide Sidebar` in the top command line to collapse or restore the left navigation rail.
+- **Portfolio Weighting & Regime Filters:** Top sub-bar dropdowns dynamically recalculate charts and regime attribution between `Equal-Weight (Net)` and `Convex-Quality QP (Net)`.

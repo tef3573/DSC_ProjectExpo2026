@@ -338,6 +338,9 @@ def format_scorecard_table(summary: Dict[str, Any]) -> str:
     strat = summary.get("strategy_performance", {})
     spy = summary.get("benchmark_spy_full_horizon", {})
     rsp = summary.get("benchmark_rsp_isolated", {})
+    garch = summary.get("timeseries_garch", {})
+    garch_strat = garch.get("Black_CEO_Net", {})
+    garch_spy = garch.get("SPY_Daily", {})
 
     width = 86
     horizon_str = (
@@ -393,6 +396,16 @@ def format_scorecard_table(summary: Dict[str, Any]) -> str:
             f"{'Total Incurred Friction Costs':<32} "
             f"{strat.get('total_transaction_friction_cost', 0.0):>15.2%} {'N/A':>16} {'N/A':>18}"
         ),
+        "-" * width,
+        f"{'GARCH(1,1) Persistence (a+b)':<32} "
+        f"{garch_strat.get('persistence', 0.0):>16.4f} "
+        f"{garch_spy.get('persistence', 0.0):>16.4f} {'N/A':>18}",
+        f"{'GARCH(1,1) Half-Life (Days)':<32} "
+        f"{garch_strat.get('half_life_days', 0.0):>15.1f}d "
+        f"{garch_spy.get('half_life_days', 0.0):>15.1f}d {'N/A':>18}",
+        f"{'GARCH(1,1) Unconditional Vol':<32} "
+        f"{garch_strat.get('unconditional_ann_vol', 0.0):>15.2%} "
+        f"{garch_spy.get('unconditional_ann_vol', 0.0):>15.2%} {'N/A':>18}",
         "=" * width,
         "* Note: RSP equal-weighted comparison is isolated starting May 1, 2003.",
         "=" * width,
