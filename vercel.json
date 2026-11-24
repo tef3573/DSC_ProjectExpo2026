@@ -1,6 +1,3 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [
-    { "source": "/api/live-market", "destination": "/api/live_market.py" }
-  ]
+  "$schema": "https://openapi.vercel.sh/vercel.json"
 }
