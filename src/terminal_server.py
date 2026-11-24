@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
+import os
 from pathlib import Path
 import time
 from typing import Any, Dict, List
@@ -299,13 +300,15 @@ class BloombergTerminalHandler(SimpleHTTPRequestHandler):
         return
 
 
-def run_server(port: int = 8081) -> None:
+def run_server(port: int | None = None, host: str | None = None) -> None:
     """Start multi-threaded 1-BLOOMBERG HTTP server."""
+    bind_port = port or int(os.environ.get("PORT", "8081"))
+    bind_host = host or ("0.0.0.0" if "PORT" in os.environ else "127.0.0.1")
     handler = partial(BloombergTerminalHandler, directory=str(WEB_DIR))
-    server = ThreadingHTTPServer(("127.0.0.1", port), handler)
-    print(f"1-BLOOMBERG Terminal running at http://127.0.0.1:{port}")
+    server = ThreadingHTTPServer((bind_host, bind_port), handler)
+    print(f"1-BLOOMBERG Terminal running at http://{bind_host}:{bind_port}")
     server.serve_forever()
 
 
 if __name__ == "__main__":
-    run_server(8081)
+    run_server()
