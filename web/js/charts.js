@@ -576,7 +576,7 @@
     ];
 
     const layout = baseLayout({
-      margin: { l: 112, r: 78, t: 6, b: 22 },
+      margin: { l: 132, r: 78, t: 6, b: 22 },
       showlegend: false,
       xaxis: { range: [-0.45, 1.25], gridcolor: COLORS.grid },
       yaxis: { autorange: "reversed", gridcolor: COLORS.grid },
