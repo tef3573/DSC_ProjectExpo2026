@@ -1,0 +1,61 @@
+name: Daily Market & Backtest Refresh
+
+on:
+  schedule:
+    # 23:00 UTC = 6:00 PM EST (Monday-Friday after US market close)
+    - cron: "0 23 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run full quantitative pipeline & export payload
+        run: |
+          python -m src.data_loader
+          python -c "from src.daily_update import extend_active_roster_dates; extend_active_roster_dates()"
+          python -m src.universe
+          python -m src.backtest
+          python -m src.attribution
+          python -m src.bootstrap
+          python -m src.arima_diagnostics
+          python -m src.macro_regimes
+          python -m src.timeseries
+          python -m src.export_web_payload
+
+      - name: Sync payload JSONs to public/data and web/data
+        run: |
+          cp web/data/dashboard_payload.json public/data/dashboard_payload.json
+          cp data/summary_metrics.json public/data/summary_metrics.json
+          cp data/summary_metrics.json web/data/summary_metrics.json
+
+      - name: Commit and push refreshed data to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/ web/data/ public/data/
+          if git diff --cached --quiet; then
+            echo "No new market data changes to commit."
+          else
+            git commit -m "chore(data): automated daily market & backtest refresh ($(date -u +%Y-%m-%d))"
+            git push origin main
+          fi
