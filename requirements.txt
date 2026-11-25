@@ -3,3 +3,8 @@ pandas>=2.1.0,<3.0.0
 numpy>=1.26.0,<2.0.0
 yfinance>=0.2.36
 requests>=2.31.0
+cvxpy
+clarabel
+scipy
+statsmodels
+arch
