@@ -1,0 +1,41 @@
+services:
+  terminal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bceos-terminal
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./data:/app/data
+      - ./web:/app/web
+      - ./public:/app/public
+      - ./docs:/app/docs
+      - ./notebook:/app/notebook
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: ["python", "-m", "src.terminal_server"]
+
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bceos-pipeline
+    volumes:
+      - ./data:/app/data
+      - ./web:/app/web
+      - ./public:/app/public
+      - ./docs:/app/docs
+      - ./notebook:/app/notebook
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: >
+      sh -c "python -m src.universe &&
+             python -m src.backtest &&
+             python -m src.attribution &&
+             python -m src.bootstrap &&
+             python -m src.arima_diagnostics &&
+             python -m src.macro_regimes &&
+             python -m src.timeseries &&
+             python -m src.export_web_payload &&
+             python -m unittest discover -s tests"

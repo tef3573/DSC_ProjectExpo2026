@@ -73,3 +73,19 @@ python3 -m unittest discover -s tests -v
 ├── requirements.txt             # Pinned environment dependencies
 ├── web/                        
 └── README.md
+
+---
+
+## One-Command Docker Reproduction & Containerized Workstation
+
+Reproduce the full quantitative pipeline (`2000-01-03` to `2026-11-24`, `6,765` sessions), run all `87` unit tests, or launch the interactive `1-BLOOMBERG` terminal in an isolated Python 3.11 container:
+
+bash
+# 1. Build the isolated Python 3.11 environment with pinned dependencies
+docker compose build
+
+# 2. Run the full end-to-end quantitative pipeline and 87-test verification suite
+docker compose run --rm pipeline
+
+# 3. Launch the interactive 7-screen terminal server on http://localhost:8081
+docker compose up terminal
