@@ -1,65 +1,47 @@
-# Executive Leadership & Risk-Adjusted Equity Performance
-**Hypothetical Black CEO Equity Index (`BCEOS <Index>`) | 2000–2026 Empirical Backtest**  
-**Author:** Tanesha | NYU Data Science Club Project Expo 2026  
+# DSC@NYU Project Expo 2026 — 5-Slide Presentation Deck (`BCEOS <Index>`)
+
+**Presenter:** Tanesha Fuller (Solo Researcher)  
+**Track:** Quantitative Finance & Applied Econometrics  
+**Live Interactive Terminal:** https://dsc-project-expo2026-tef3573.vercel.app  
 
 ---
 
 ## Slide 1: Title, Author & Research Motivation
-- **Research Question:** Do publicly traded U.S. companies led by Black Chief Executive Officers generate statistically significant risk-adjusted alpha over a multi-decade horizon?
-- **The Empirical Gap:** Prior corporate governance studies often suffer from **survivorship bias** (dropping acquired/delisted firms like Aetna, GBT, JCPenney, and Walgreens) and **look-ahead bias** (trading on announcement dates before public disclosure).
-- **Contribution:** We construct `BCEOS <Index>`, a point-in-time, survivorship-bias-free daily equity index spanning **40 Black CEO tenures across 36 U.S. public issuers** from **January 3, 2000 to November 23, 2026 (6,764 trading sessions)**.
-- **Speaker Notes (45s):** Introduce the motivation behind treating executive leadership representation as an institutional factor/index design problem, emphasizing strict point-in-time engineering over retrospective anecdotes.
+* **Title:** *The Black Representation in Alpha (`BCEOS <Index>`): A Point-in-Time Equity Backtest, Convex Optimization & Multi-Factor Attribution (2000–2026)*
+* **Plain-English Concept (The "Hypothetical ETF"):** Imagine a rules-based index fund that only holds publicly traded U.S. companies while actively led by a Black CEO—buying the trading day after appointment and selling the trading day after departure.
+* **Research Motivation & Empirical Gap:** Prior corporate governance studies often suffer from **survivorship bias** (dropping acquired or bankrupt firms) and **look-ahead bias**. Over 27 years (`2000-01-03` to `2026-11-24`, `6,765` NYSE sessions across `40` CEOs and `36` issuers), we test whether this leadership screen outperforms the S&P 500 (`SPY` and equal-weight `RSP`) under institutional execution controls.
+* **Headline Result:** **12.83% Net CAGR** (`25.55x` wealth multiple) vs. **8.01% SPY** (`+482 bps/yr` net of `10 bps` friction), generating **+10.00% annualized Jensen's Alpha** (`+7.90%` vs. `RSP`).
 
 ---
 
 ## Slide 2: Survivorship-Bias-Free Methodology & Point-in-Time Masking
-- **Point-in-Time Universe Construction (`src/universe.py`):**
-  - Tracks exact SEC Form 8-K appointment and departure windows across **36 issuers**, including **6 delisted/acquired tickers** (`AET`, `GBT`, `JCP`, `QRTEA`, `PBPB`, `WBA`) reconstructed from historical CRSP/archive series.
-  - Active breadth evolves organically from $N_t = 4$ firms in 2000 to $N_t = 17$ firms in 2026.
-- **Strict $t+1$ Causal Execution Lag & Friction Model (`src/backtest.py`):**
-  - Portfolio membership shifts take effect on the **next trading day ($t+1$)** to eliminate intraday look-ahead bias.
-  - Dynamic **33.3% single-issuer concentration cap** (allocating residual weight to risk-free cash when $N_t < 3$).
-  - Realistic **10 bps one-way transaction cost** deducted on every rebalance and turnover event.
-- **Speaker Notes (60s):** Walk through how delisted mergers (e.g., Aetna's acquisition by CVS, GBT's acquisition by Pfizer) and $t+1$ lagging guarantee an implementable, real-world trading simulation.
+* **Dynamic Membership Matrix (`src/universe.py`):** Maps exact executive start and end timestamps across `36` U.S. public tickers (`6,765` sessions, active breadth $N_t \in [0, 17]$, mean $9.43$).
+* **Zero Survivorship Bias (`src/data_loader.py`):** Integrates local historical archives for delisted and acquired firms (`AET`, `GBT`, `JCP`, `PBPB`, `WBA`) and stitches corporate restructurings (`QVCG` $\rightarrow$ `QRTEA`).
+* **Strict $t+1$ Causal Execution Lag:** Shifts executive transition flags forward by one trading day ($I_{i,t} = I_{i,t-1}^{\text{raw}}$) so portfolio weights never condition on same-day announcements.
+* **Early-Era Cash Guardrail ($N_t < 3$) & Realistic Friction (`src/backtest.py`):** Caps equity exposure at $B_t = \min(1, N_t/3)$ when fewer than 3 CEOs are active (parking residual capital in cash), models daily weight drift, and deducts `10 bps` per unit of one-way turnover (`73.24%` annualized turnover; `1.97%` total cumulative friction).
 
 ---
 
 ## Slide 3: CVXPY Convex Optimization & Shrinkage Covariance
-- **Two Portfolio Weighting Schemes:**
-  1. **Equal-Weight (`Black_CEO_Net`):** Benchmark $1/N_t$ allocation capturing pure breadth across all active Black CEO issuers.
-  2. **Convex-Quality QP (`Convex_Quality_Net`):** Solves a daily convex quadratic program via `CVXPY` minimizing portfolio variance subject to a **35% max position cap** and full investment constraints.
-- **Ledoit-Wolf Covariance Shrinkage (`src/optimizer.py`):**
-  - Regularizes sample covariance matrices over trailing estimation windows to prevent extreme weight concentration when $N_t$ is small.
-- **Dynamic GARCH(1,1) Volatility-Targeting Overlay (`src/timeseries.py`):**
-  - Walk-forward 1-step variance forecasts scale equity exposure $w_t \in [0\%, 100\%]$ to target **20.0% annualized volatility** (matching SPY's 19.27% risk profile).
-- **Speaker Notes (60s):** Explain how convex optimization and GARCH variance targeting address the concentration risk of early-2000s small-$N_t$ cohorts.
+* **Three Allocation Schemes (`src/optimizer.py`):** Compares Equal-Weight (`1/N_t`), Inverse-Volatility (`1/\sigma_i`), and a regularized **Convex-Quality Quadratic Program (`QP`)** solved via `cvxpy` (`CLARABEL` / `OSQP` / `SCS`).
+* **Shrinkage Covariance Conditioning ($W = 63\text{d}$):** Regularizes trailing sample covariance via $\Sigma^*_t = (1 - \lambda)\hat{\Sigma}_t + \lambda\,\mathrm{diag}(\hat{\Sigma}_t) + \epsilon I$ ($\lambda_{\min} \ge \epsilon > 0$) to ensure strict positive semi-definiteness even in small-$N$ regimes.
+* **Quality Tilt & Concentration Controls:** Minimizes $\frac{1}{2} w^{\top}\Sigma^*_t w - \gamma q_t^{\top} w + \eta \|w - w_{\text{prev}}\|_2^2$ where $q_t$ is the cross-sectional $z$-score of trailing return drift over downside semi-deviation, subject to $\sum w_i = B_t$ and a hard **$35\%$ single-issuer ceiling**.
+* **Dynamic Econometric Risk Overlay (`src/timeseries.py`):** Pairs allocation with `GARCH(1,1)` / `GJR-GARCH(1,1)` conditional volatility modeling (`0.9983` full-horizon persistence, compressing to `0.9061` and a `7.0d` shock half-life post-2010).
 
 ---
 
-## Slide 4: Empirical Results — Institutional Scorecard & Benchmark Outperformance
-| Performance Metric (2000–2026) | BCEOS Eq-Wt (Net) | Convex-Quality QP (Net) | Causal 20% Vol-Target | S&P 500 (`SPY`) | S&P Eq-Wt (`RSP`*) |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Net CAGR** | **12.74%** | **9.65%** | **9.52%** | 8.03% | 11.13% |
-| **Cumulative Wealth ($10k Base)** | **$249,800 (24.98x)** | **$117,400 (11.74x)** | **$113,800 (11.38x)** | $79,400 (7.94x) | $120,200 (12.02x) |
-| **Annualized Volatility** | 38.33% | 24.81% | **19.93%** | 19.27% | 19.69% |
-| **Sharpe / Sortino Ratio** | **0.44 / 0.83** | 0.44 / 0.72 | **0.48 / 0.85** | 0.42 / 0.58 | 0.56 / 0.74 |
-| **Maximum Drawdown (MDD)** | -70.44% | -59.82% | **-51.11%** | -55.19% | -59.92% |
-| **Post-2010 GARCH(1,1) Half-Life** | **7.0 days** | 365.7 days | **7.0 days** | 20.8 days | — |
-
-- **Key Insights:**
-  - Outpaces cap-weighted `SPY` by **+471 bps/yr** net of **73.25% annualized turnover** (only **1.97%** cumulative friction drag over 27 years).
-  - Post-2010 breadth expansion ($N_t 	o 17$) accelerated net CAGR to **16.21%** and cut volatility shock half-life by **95%** (from 146.8d to **7.0d**).
-- **Speaker Notes (60s):** Highlight the Sortino ratio (0.83 vs. 0.44 Sharpe), showing that volatility is heavily skewed toward upside breakouts rather than permanent capital loss.
+## Slide 4: Empirical Results — Scorecard & Benchmark Outperformance
+* **Full-Horizon Cumulative Compounding (`2000–2026`, Net of `10 bps` Friction):**
+  * **BCEOS Equal-Weight (Net):** `12.83%` CAGR | `25.55x` Wealth (`$10k` $\rightarrow$ `$255.5k`) | `0.44` Sharpe | `0.83` Sortino | `0.86` Beta vs. `SPY`
+  * **S&P 500 Cap-Weighted (`SPY`):** `8.01%` CAGR | `19.27%` Ann. Vol | `0.42` Sharpe | `55.19%` MDD
+  * **S&P 500 Equal-Weighted (`RSP`, post-May 2003):** `11.15%` CAGR | `19.69%` Ann. Vol | `0.56` Sharpe | `59.92%` MDD
+* **Structural Maturation (Pre-2010 vs. Post-2010 Split):** As active breadth expanded from $N_t \le 7$ to $15\text{–}17$ concurrent CEOs, post-2010 CAGR rose to **`16.36%`** (`1.00` Sortino, `47.47%` MDD, `7.0d` `GARCH` half-life) vs. `13.66%` for `SPY`.
+* **Macro-Regime Resilience (`src/macro_regimes.py`):** Outperformed `SPY` in the Dot-Com Bust (`+8.16%` vs. `-42.64%`, `0.62x` downside capture), ZIRP/QE Era (`+960.47%` vs. `+520.77%`), COVID-19 Surge (`+141.48%` vs. `+44.91%`), and AI/High-Rate Regime (`+92.86%` vs. `+74.17%`, `17.65%` MDD).
 
 ---
 
-## Slide 5: Fama-French 5-Factor Attribution, Monte Carlo & Takeaways
-- **Fama-French 5-Factor Newey-West HAC Regression (`src/attribution.py`):**
-  - Controls for Market (`Mkt-RF` $eta = 0.86$), Size (`SMB` $= +0.42$), Value (`HML` $= +0.29$), Profitability (`RMW` $= -0.18$), and Investment (`CMA` $= -0.11$).
-  - **Annualized FF5 Alpha:** **+9.90% to +10.52%** ($t > 2.5, p < 0.01$), confirming idiosyncratic alpha beyond small-cap or value factor tilts.
-- **10,000-Trial Monte Carlo Permutation Bootstrap (`src/bootstrap.py`):**
-  - Outperforms **97.6%** of 10,000 randomly sampled size-matched S&P peer cohorts ($p = 0.024$).
-- **Martingale Market Efficiency (`src/arima_diagnostics.py`):**
-  - Walk-forward `ARIMA(1,0,1)` out-of-sample $R^2 = -0.055\%$ and Ljung-Box Lag-1 $p = 0.1164$ rule out stale-price autocorrelation.
-- **Live Interactive Workstation (`1-BLOOMBERG`):** Built a 7-screen institutional terminal (`WEI`, `DES`, `MEMB`, `GP`, `ECST`, `VOL`, `ALPH`) with automated 5:30 PM ET post-close market updates.
-- **Speaker Notes (45s):** Conclude with robustness takeaways and transition to the live `1-BLOOMBERG` terminal demonstration.
+## Slide 5: Fama-French Factor Attribution, Tech Stack & Policy Takeaways
+* **Fama-French 5-Factor (`FF5`) OLS with Newey-West HAC (`src/attribution.py`):** Controlling for market (`Mkt-RF`), size (`SMB`), value (`HML`), profitability (`RMW`), and investment (`CMA`) confirms **+10.00% annualized Jensen's Alpha** vs. `SPY` (`+7.90%` vs. `RSP`) with heteroskedasticity- and autocorrelation-consistent standard errors.
+* **Non-Parametric Bootstrap & Weak-Form Efficiency (`src/bootstrap.py`, `src/arima_diagnostics.py`):** Politis-Romano stationary block bootstrap validates tail-aware confidence intervals, while `6,513`-session walk-forward `ARIMA(1,0,1)` (`OOS R2 = -0.0774%`) and Ljung-Box Lag-1 ($p = 0.1741$) rule out stale-price drift.
+* **Full-Stack Architecture & Live Workstation:** Python 3.11 (`NumPy`, `Pandas`, `SciPy`, `CVXPY`, `statsmodels`, `arch`), `Plotly.js` 7-screen Bloomberg-style terminal (`WEI`, `DES`, `MEMB`, `WEALTH`, `ECST`, `VOL`, `ALPH`), Vercel serverless `/api/live_market`, `87` unit tests, Docker, and automated GitHub Actions daily refresh.
+* **Policy & Governance Takeaways:** Executive representation barriers act as a rigorous selection filter rather than a performance drag; expanding C-suite breadth compresses idiosyncratic risk while delivering durable long-horizon compounding.
