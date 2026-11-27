@@ -549,7 +549,7 @@
 
   async function pollLiveMarket() {
     try {
-      const resp = await fetch("/api/live-market");
+      const resp = await fetch("/api/live_market", { signal: AbortSignal.timeout(1500) });
       if (resp.ok) {
         state.marketData = await resp.json();
         renderMarketTables(state.marketData);

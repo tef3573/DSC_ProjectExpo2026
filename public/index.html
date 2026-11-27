@@ -89,7 +89,7 @@
           <div class="bb-box">
             <div class="bb-box__hdr">
               <span>WORLD EQUITY INDICES (WEI &lt;GO&gt;)</span>
-              <span id="wei-feed-tag" class="bb-amber">CONNECTING...</span>
+              <span id="wei-feed-tag" class="bb-green">LIVE SNAPSHOT ●</span>
             </div>
             <table class="bb-table" id="wei-table">
               <thead>
@@ -315,7 +315,7 @@
       <div class="bb-grid-2col bb-box--sm-row">
         <div class="bb-box">
           <div class="bb-box__hdr">
-            <span>ACTIVE BLACK CEO UNIVERSE BREADTH (N<sub>t</sub>: 0 TO 17 ISSUERS)</span>
+            <span>ACTIVE BLACK CEO UNIVERSE BREADTH (N<sub>t</sub>: 4 TO 17 ISSUERS; DAY-1 t+1 LAG = 0)</span>
             <span class="bb-muted">POINT-IN-TIME T+1 MASK</span>
           </div>
           <div id="chart-constituent-count" class="bb-chart-sm"></div>
@@ -329,7 +329,7 @@
         </div>
       </div>
       <div class="bb-narrator-bar" id="commentary-memb">
-        <strong class="bb-amber">PLAIN ENGLISH:</strong> Loading active universe commentary...
+        <strong class="bb-amber">PLAIN ENGLISH:</strong> Active Black CEO representation expands from 4 issuers in Jan 2000 (after day-1 t+1 execution lag) to 17 concurrent public companies today, including delisted archives (AET, GBT, JCP, QRTEA, PBPB, WBA).
       </div>
       <div class="bb-box bb-box--grow bb-box--scroll">
         <div class="bb-box__hdr">
@@ -414,7 +414,7 @@
       </div>
 
       <div class="bb-narrator-bar" id="commentary-gp">
-        <strong class="bb-amber">PLAIN ENGLISH:</strong> Loading wealth &amp; drawdown commentary...
+        <strong class="bb-amber">PLAIN ENGLISH:</strong> Net of 10 bps transaction costs, $10,000 invested in BCEOS Equal-Weight compounds to $255,500+ (12.83% CAGR vs. 8.01% SPY), with post-2010 maturation compressing drawdowns and accelerating Sortino to 1.00.
       </div>
     </section>
 
@@ -486,7 +486,7 @@
       </div>
 
       <div class="bb-narrator-bar" id="commentary-ecst">
-        <strong class="bb-amber">PLAIN ENGLISH:</strong> Loading macro regime commentary...
+        <strong class="bb-amber">PLAIN ENGLISH:</strong> Selected Regime Briefing — AI &amp; High-Rate Era (2023–2026): BCEOS delivers +92.86% cumulative return vs. +74.17% SPY with 0.82x downside capture and 17.65% max drawdown. Click any regime row above to inspect.
       </div>
     </section>
 
@@ -571,7 +571,7 @@
       </div>
 
       <div class="bb-narrator-bar" id="commentary-vol">
-        <strong class="bb-amber">PLAIN ENGLISH:</strong> Loading volatility &amp; risk overlay commentary...
+        <strong class="bb-amber">PLAIN ENGLISH:</strong> Full-horizon GARCH(1,1) volatility persistence (0.9983) moderates sharply to 0.9061 (7.0-day shock half-life) post-2010 as universe breadth reaches 15–17 firms, while a 20% vol-targeted overlay caps tail risk.
       </div>
     </section>
 
@@ -590,7 +590,7 @@
       <div class="bb-quadrant-grid bb-grid-fill">
         <!-- Q1: Staggered FF5 Factor Loadings -->
         <div class="bb-box">
-          <div class="bb-box__hdr"><span>1) FAMA-FRENCH 5-FACTOR LOADINGS (NEWEY-WEST HAC)</span><span class="bb-green">+10.52% ALPHA ***</span></div>
+          <div class="bb-box__hdr"><span>1) FAMA-FRENCH 5-FACTOR LOADINGS (NEWEY-WEST HAC)</span><span id="alph-panel1-badge" class="bb-green">+10.00% ALPHA ***</span></div>
           <div id="chart-ff5-factors" class="bb-chart-quad"></div>
         </div>
 
@@ -625,7 +625,7 @@
       </div>
 
       <div class="bb-narrator-bar" id="commentary-alph">
-        <strong class="bb-amber">PLAIN ENGLISH:</strong> Loading factor attribution &amp; bootstrap commentary...
+        <strong class="bb-amber">PLAIN ENGLISH:</strong> After stripping out Fama-French 5-Factor exposures (Mkt-RF, SMB, HML, RMW, CMA) with Newey-West HAC standard errors, BCEOS retains statistically significant positive Jensen's alpha confirmed by stationary block bootstrap.
       </div>
     </section>
   </main>
@@ -644,7 +644,7 @@
   <!-- Classic Bottom Terminal Status Bar -->
   <footer class="footer" role="contentinfo">
     <div class="footer__inner">
-      <span><strong class="bb-green">STATUS: TERMINAL READY</strong> | CONNECTION: NYC-QUANT-01 | <span id="footer-feed-status" class="bb-amber">FEED: INITIALIZING</span></span>
+      <span><strong class="bb-green">STATUS: TERMINAL READY</strong> | CONNECTION: NYC-QUANT-01 | <span id="footer-feed-status" class="bb-green">FEED: LIVE SNAPSHOT ●</span></span>
       <span>PRESS &lt;0&gt;-&lt;6&gt; OR CLICK ANY CYAN FUNCTION CODE</span>
     </div>
   </footer>
