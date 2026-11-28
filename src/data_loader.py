@@ -14,7 +14,7 @@ import pandas as pd
 import yfinance as yf
 
 logging.basicConfig(
-    level=logging.INFO, 
+    level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
     )
 
