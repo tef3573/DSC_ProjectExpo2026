@@ -1,91 +1,80 @@
-# Black CEO Equity Strategy: Quantitative Alpha & Factor Attribution
+# The Black Representation in Alpha 
 
-#### An institutional-grade, survivorship-bias-free, point-in-time quantitative backtesting engine modeling excess return and risk attribution of a dynamic equity portfolio composed of Black Fortune 500 & S&P 500 CEOs using risk-adjusted excess returns ($\alpha > 0$) relative to market cap-weighted (`SPY`) and equal-weighted (`RSP`) S&P 500 benchmarks from 2000 through October 2026.
----
+[![Live Terminal](https://img.shields.io/badge/Live_Terminal-Vercel-0F172A?style=for-the-badge)](https://dsc-project-expo2026-tef3573-git-main-tef3573.vercel.app/)
+[![Python 3.11](https://img.shields.io/badge/Python-3.11-1E3A8A?style=for-the-badge)](https://www.python.org/)
+[![Tests](https://img.shields.io/badge/Unit_Tests-87_Passing-15803D?style=for-the-badge)](#how-to-use-it)
+[![License: MIT](https://img.shields.io/badge/NYU_DSC-Project_Expo_2026-334155?style=for-the-badge)](https://github.com/tef3573/DSC_ProjectExpo2026)
 
-## Research Hypotheses
-* **Null Hypothesis ($H_0$):** $\alpha \le 0$  
-  A portfolio of Black CEO-led equities produces returns explained entirely by systematic factor loadings (Market, Size, Value, Profitability, Investment).
-* **Alternative Hypothesis ($H_1$):** $\alpha > 0,\; p < 0.05$  
-  A dynamic, quality-tilted portfolio of Black CEO-led companies produces persistent, statistically significant risk-adjusted alpha with superior downside preservation.
+**Live 7-Screen Interactive Workstation:** [dsc-project-expo2026-tef3573-git-main-tef3573.vercel.app](https://dsc-project-expo2026-tef3573-git-main-tef3573.vercel.app/)
 
 ---
 
-## Methodological Rigor
-1. **Zero Survivorship Bias:** Integrates historical price series for delisted constituents (e.g., J.C. Penney `JCP` during Marvin Ellison's 2015–2018 tenure) rather than restricting the universe to surviving entities.
-2. **Zero Look-Ahead Bias:** Implements a point-in-time dynamic boolean eligibility matrix $M_{t,i} \in \{0, 1\}$. Assets enter the investable set on the official start date and exit on the resignation date, with a strict $t+1$ execution lag.
-3. **Cash-Drag Defense:** When the active constituent count $N_t < 3$, equity weight is scaled down to $N_t / 3.0$ and the remainder is swept to cash earning the risk-free rate ($R_f$) to prevent idiosyncratic concentration blowups.
-4. **Transaction Friction:** Incorporates a 10 bps ($0.0010$) trading friction deducted on daily portfolio turnover.
-5. **Decoupled Dual Benchmarking:** Compares performance against cap-weighted S&P 500 (`SPY`) across the entire horizon (2000–2026) and against equal-weighted S&P 500 (`RSP`) post-May 2003 (RSP inception date) to prevent flat-line distortions.
+## 1. What This Project Does
 
----
-## Milestone 1 Status: Verified & Frozen (v0.1.0)
+**`BCEOS`** is a survivorship-bias-free, point-in-time quantitative backtesting engine and interactive 7-screen financial workstation that evaluates whether publicly traded U.S. companies led by Black CEOs generate persistent, risk-adjusted excess returns ($\alpha > 0$) relative to the S&P 500 (`SPY` and equal-weight `RSP`) from **`{meta["backtest_start"]}` through `{meta["backtest_end"]}`** ({meta["trading_sessions"]:,} NYSE trading sessions).
 
-| Requirement | Implementation Details | Status |
-| :--- | :--- | :--- |
-| **Audited Universe** | 21 unique executive tenures across large/mid-cap equities | Verified |
-| **Market Data Ingestion** | Automated Yahoo Finance batch engine (`2000-01-01` to current) | Verified |
-| **Corporate Action Defense** | `QVCG` continuity fallback merged into `QRTEA` | Verified |
-| **Survivorship-Bias Defense** | Merged delisted archive (`data/delisted/JCP.csv`) | Verified |
-| **Trading Calendar** | Reindexed to `SPY` (6,748 sessions, 5-day bounded forward-fill) | Verified |
-| **Execution Lag** | Strict $t+1$ shift applied to eliminate look-ahead bias | Verified |
+* **Dynamic Leadership Tracking (40 CEO Tenures / 36 Issuers):** Models a rules-based portfolio that enters a stock at the closing auction on the trading day *after* a Black CEO is appointed ($t+1$) and exits at the close on the trading day *after* departure.
+* **Institutional Bias & Friction Controls:** Reconstructs acquired and delisted companies (`AET`, `GBT`, `JCP`, `QRTEA`, `PBPB`, `WBA`) to eliminate survivorship bias, enforces a sparse-universe cash buffer $B_t = \\min(1, N_t / {meta["min_diversification"]})$ when fewer than {meta["min_diversification"]} CEOs are active, tracks daily weight drift, and deducts {meta["transaction_fee_bps"]:.0f} bps round-trip transaction costs on every rebalance.
+* **Multi-Scheme Optimization & Econometric Attribution:** Benchmarks Equal-Weight and Inverse-Volatility allocations against a `CVXPY` Ledoit-Wolf shrinkage quadratic program (35% single-issuer cap), Fama-French 5-Factor Newey-West HAC regressions, 10,000-trial stationary block bootstraps, and `GARCH(1,1)` / `ARIMA` volatility regime models.
 
 ---
 
-## Milestone 2 Completed Architecture (November 2026)
-* **Vectorized Backtest Engine**: Point-in-time universe masking with $t+1$ trading lag.
-* **Concentration Defense**: Automatic cash-drag reallocation when active constituents $N_t < 3$.
-* **Institutional Friction**: Daily price-return weight drift tracking with 10 bps turnover friction deduction.
-* **Decoupled Dual Benchmarks**:
-  - `SPY` (Cap-Weighted): Full 2000–2026 macro comparison.
-  - `RSP` (Equal-Weighted): Isolated post-May 1, 2003 inception window filtering synthetic zero returns.
-* **Artifacts & Scorecards**: Continuous daily CSV export (`data/backtest_results.csv`), JSON metrics export (`data/summary_metrics.json`), and formatted terminal scorecard tables.
-* **Test Suite**: 30 comprehensive unit and integration tests passing.
- 
----
+## 2. Why It Matters
 
-## Test Verification
-```text
-bash
-python3 -m unittest discover -s tests -v
+1. **Testing Executive Representation with Institutional Rigor:** Public debates around C-suite diversity often rely on short event studies or survivor-only samples that overstate returns or ignore concentration risk. By enforcing strict $t+1$ execution lags, delisted-issuer reconstruction, and realistic trading friction across 26+ years of dot-com, GFC, COVID-19, and AI market cycles, this framework isolates the true financial signal of Black executive leadership.
+2. **Demonstrating Post-2010 Scalability:** In 2000, active Black CEO representation across U.S. public markets was limited to $N_t = 4$ firms—creating high idiosyncratic concentration during the 2008 financial crisis. As C-suite representation expanded to $15\text{{--}}17$ concurrent companies after 2010, `GARCH(1,1)` volatility shock persistence fell sharply and risk-adjusted performance strengthened, proving that broader executive representation enhances portfolio diversification rather than acting as a return drag.
 
-## Architecture Overview
+### Audited Full-Horizon Scorecard (`{meta["backtest_start"]}` – `{meta["backtest_end"]}`)
 
-.
-├── data/
-│   ├── black_ceo_roster.csv     # Audited executive tenure roster (21 entries)
-│   ├── delisted/
-│   │   └── JCP.csv              # Survivorship-free historical NYSE prices (740 sessions)
-│   └── prices_daily.csv         # Daily adjusted close matrix (2000–2026)
-│   ├── prices_daily.csv         # 6,748 trading sessions x 23 columns (SPY-aligned)
-│   └── universe_mask.csv        # Boolean eligibility matrix (t+1 execution lag)
-├── docs/
-│   └── universe.md              # Mathematical rules and diversification defense
-├── src/
-│   ├── __init__.py              # Package initializer
-│   ├── data_loader.py           # Ingestion engine & delisted merger
-│   ├── universe.py              # Point-in-time mask builder
-│   └── backtest.py              # Vectorized backtesting & metrics engine
-├── tests/
-│   └── test_data_schema.py      # Automated schema & date consistency tests
-│   └── test_universe.py         # Lag & active constituent count bounds
-│   └── test_integration_milestone1.py # End-to-end pipeline integration check
-├── requirements.txt             # Pinned environment dependencies
-├── web/                        
-└── README.md
+| Metric | `BCEOS` Equal-Weight (Net) | `SPY` (Cap-Weighted) | `RSP` (Equal-Weight, Post-2003*) |
+| :--- | :---: | :---: | :---: |
+| **Annualized CAGR** | **{sp["cagr_net"]*100:.2f}%** (Gross: {sp["cagr_gross"]*100:.2f}%) | {spy["benchmark_cagr"]*100:.2f}% | {rsp["benchmark_cagr"]*100:.2f}% |
+| **Cumulative Wealth Multiple** | **{sp["cumulative_multiple_net"]:.2f}x** (Gross: {sp["cumulative_multiple_gross"]:.2f}x) | {(1 + spy["benchmark_cagr"])**(meta["trading_sessions"]/252):.2f}x | {(1 + rsp["benchmark_cagr"])**(rsp["observations"]/252):.2f}x |
+| **Annualized Volatility** | {sp["annualized_volatility"]*100:.2f}% | {spy["benchmark_volatility"]*100:.2f}% | {rsp["benchmark_volatility"]*100:.2f}% |
+| **Sharpe / Sortino Ratio** | **{sp["sharpe_ratio"]:.2f} / {sp["sortino_ratio"]:.2f}** | {spy["benchmark_sharpe"]:.2f} / 0.69 | {rsp["benchmark_sharpe"]:.2f} / 0.81 |
+| **Maximum Drawdown** | {sp["max_drawdown"]*100:.2f}% | {spy["benchmark_mdd"]*100:.2f}% | {rsp["benchmark_mdd"]*100:.2f}% |
+| **Annualized Jensen's Alpha ($\\alpha$)** | **+{spy["alpha_annual"]*100:.2f}%** | 0.00% | +{rsp["alpha_annual"]*100:.2f}% (vs. RSP) |
+
+*\\*Note: `RSP` is evaluated over its exact post-inception window (`{rsp["start_date"]}` to `{rsp["end_date"]}`, {rsp["observations"]:,} sessions).*
 
 ---
 
-## One-Command Docker Reproduction & Containerized Workstation
+## 3. How to Use It
 
-Reproduce the full quantitative pipeline (`2000-01-03` to `2026-11-24`, `6,765` sessions), run all `87` unit tests, or launch the interactive `1-BLOOMBERG` terminal in an isolated Python 3.11 container:
+### Option A: Explore the Live Web Terminal (Zero Setup)
+Open **[dsc-project-expo2026-tef3573-git-main-tef3573.vercel.app](https://dsc-project-expo2026-tef3573-git-main-tef3573.vercel.app/)** and use keys **`0`–`6`** (or the command bar) to navigate all 7 analytical screens:
+* **`0) WEI <GO>`:** Global market monitor & live VIX context.
+* **`1) DES <GO>`:** Index description, full-horizon scorecard, and scheme toggle (`Equal-Weight` vs. `Convex-Quality QP`).
+* **`2) MEMB <GO>`:** Interactive roster of all 40 CEO tenures and 36 issuers (including delisted profiles and primary sources).
+* **`3) GP <GO>`:** Interactive growth of $10,000, underwater drawdown, rolling 3-year alpha, and gross-vs-net friction toggle.
+* **`4) ECST <GO>`:** Macroeconomic regime attribution across Dot-Com, GFC, Post-2010 Expansion, COVID-19, and AI/High-Rate eras.
+* **`5) VOL <GO>`:** Conditional `GARCH(1,1)` volatility regime shift and causal 20% volatility-targeted overlay.
+* **`6) ALPH <GO>`:** Fama-French 5-Factor Newey-West HAC loadings and 10,000-trial stationary block bootstrap distribution.
 
-bash
-# 1. Build the isolated Python 3.11 environment with pinned dependencies
-docker compose build
+### Option B: Run Locally with Python 3.11
+```bash
+git clone [https://github.com/tef3573/DSC_ProjectExpo2026.git](https://github.com/tef3573/DSC_ProjectExpo2026.git)
+cd DSC_ProjectExpo2026
+python3.11 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
 
-# 2. Run the full end-to-end quantitative pipeline and 87-test verification suite
-docker compose run --rm pipeline
+# 1. Run the 87-test verification suite
+python -m unittest discover -s tests -v
 
-# 3. Launch the interactive 7-screen terminal server on http://localhost:8081
-docker compose up terminal
+# 2. Regenerate full backtest, econometrics, charts, and web payload
+python -m src.backtest
+python -m src.export_web_payload
+
+# 3. Start the local interactive terminal server on http://localhost:8081
+python -m src.terminal_server
+---
+
+## 5. NYU Project Expo Judging Rubric Alignment
+
+| Judging Criterion | How `BCEOS <Index>` Addresses It |
+| :--- | :--- |
+| **Problem Formulation & Domain Impact** | Tests whether Black executive leadership across U.S. public companies generates persistent risk-adjusted alpha over 26+ years while isolating concentration vs. post-2010 diversification effects. |
+| **Data Rigor & Bias Mitigation** | Reconstructs acquired/delisted issuers (`AET`, `GBT`, `JCP`, `QRTEA`, `PBPB`, `WBA`), enforces strict $t+1$ execution lags, applies a sparse-universe cash buffer ($N_t < 3$), and deducts 10 bps turnover friction. |
+| **Modeling & Statistical Depth** | Combines Equal-Weight, Inverse-Volatility, and `CVXPY` Ledoit-Wolf shrinkage quadratic optimization with Fama-French 5-Factor Newey-West HAC regressions, 10,000-trial stationary block bootstraps, and `GARCH(1,1)` / `ARIMA` diagnostics. |
+| **Visualization & Communication** | Delivers an interactive 7-screen Bloomberg-style web workstation (`WEI` through `ALPH`) with plain-English narrator bars, a 5-slide executive deck (`docs/slides.pdf`), and a `24" × 36"` conference poster (`docs/poster.pdf`). |
+| **Reproducibility & Engineering** | Fully containerized via `Dockerfile` and `docker-compose.yml` with pinned dependencies (`requirements.txt`), an end-to-end Jupyter walkthrough (`notebook/final_analysis.ipynb`), and 87 automated unit tests. |
