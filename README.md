@@ -67,3 +67,14 @@ python -m src.export_web_payload
 
 # 3. Start the local interactive terminal server on http://localhost:8081
 python -m src.terminal_server
+---
+
+## 5. NYU Project Expo Judging Rubric Alignment
+
+| Judging Criterion | How `BCEOS <Index>` Addresses It |
+| :--- | :--- |
+| **Problem Formulation & Domain Impact** | Tests whether Black executive leadership across U.S. public companies generates persistent risk-adjusted alpha over 26+ years while isolating concentration vs. post-2010 diversification effects. |
+| **Data Rigor & Bias Mitigation** | Reconstructs acquired/delisted issuers (`AET`, `GBT`, `JCP`, `QRTEA`, `PBPB`, `WBA`), enforces strict $t+1$ execution lags, applies a sparse-universe cash buffer ($N_t < 3$), and deducts 10 bps turnover friction. |
+| **Modeling & Statistical Depth** | Combines Equal-Weight, Inverse-Volatility, and `CVXPY` Ledoit-Wolf shrinkage quadratic optimization with Fama-French 5-Factor Newey-West HAC regressions, 10,000-trial stationary block bootstraps, and `GARCH(1,1)` / `ARIMA` diagnostics. |
+| **Visualization & Communication** | Delivers an interactive 7-screen Bloomberg-style web workstation (`WEI` through `ALPH`) with plain-English narrator bars, a 5-slide executive deck (`docs/slides.pdf`), and a `24" × 36"` conference poster (`docs/poster.pdf`). |
+| **Reproducibility & Engineering** | Fully containerized via `Dockerfile` and `docker-compose.yml` with pinned dependencies (`requirements.txt`), an end-to-end Jupyter walkthrough (`notebook/final_analysis.ipynb`), and 87 automated unit tests. |
